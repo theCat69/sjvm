@@ -1,4 +1,3 @@
-use crate::jdk_resolver::detect_jdks;
 use crate::memory::memory;
 use crate::symlinks::{create_symlink, get_symlink_path};
 

@@ -26,6 +26,7 @@ pub fn setup() {
     if memory_file.is_file() {
         fs::remove_file(memory_file).unwrap();
     }
+
     let _ = memory();
 
     println!("\n✅ Setup complete.");
