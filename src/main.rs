@@ -1,12 +1,12 @@
 mod jdk_resolver;
 mod list_command;
-mod setup;
+mod setup_command;
 mod symlinks;
 mod use_command;
 
 use clap::{Parser, Subcommand};
 use list_command::list_versions;
-use setup::setup;
+use setup_command::setup;
 use use_command::{use_version, use_version_local};
 
 #[derive(Parser)]

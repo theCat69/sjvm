@@ -13,17 +13,17 @@ pub fn setup() {
     let jdks = detect_jdks();
     if let Some(first) = jdks.first() {
         create_symlink(first, &symlink).unwrap();
-        println!("Initial symlink set to: {:?}", first);
+        println!("Initial symlink set to: {}", first.to_string_lossy());
     } else {
         println!("No JDKs found.");
     }
 
     println!("\n✅ Setup complete.");
     if cfg!(target_os = "windows") {
-        println!("➡️  Add C:\\Java\\current\\bin to your PATH.");
-        println!("➡️  Add C:\\Java\\curentas your JAVA_HOME.");
+        println!("=> Add C:\\Java\\current\\bin to your PATH.");
+        println!("=> Add C:\\Java\\current as your JAVA_HOME.");
     } else {
-        println!("➡️  Add $HOME/.java/current/bin to your PATH.");
-        println!("➡️  Add $HOME/.java/currenbin as your JAVA_HOME.");
+        println!("=> Add $HOME/.java/current/bin to your PATH.");
+        println!("=> Add $HOME/.java/current as your JAVA_HOME.");
     }
 }
