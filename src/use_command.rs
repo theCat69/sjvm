@@ -13,3 +13,17 @@ pub fn use_version(version: &str) {
     }
     println!("❌ JDK version '{}' not found.", version);
 }
+
+pub fn use_version_local(version: &str) {
+    let jdks = detect_jdks();
+    for jdk in jdks {
+        if jdk.file_name().unwrap().to_string_lossy().contains(version) {
+            println!("Using local version automatically in not supported on cmd.");
+            println!("Please copy/paste those commands in your current prompt :");
+            println!("set JAVA_HOME={}", &jdk.to_string_lossy());
+            println!("set PATH={}\\bin;%PATH%", jdk.to_string_lossy());
+            return;
+        }
+    }
+    println!("❌ JDK version '{}' not found.", version);
+}
