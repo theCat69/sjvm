@@ -1,8 +1,9 @@
 use crate::jdk_resolver::detect_jdks;
+use crate::memory::memory;
 use crate::symlinks::{create_symlink, get_symlink_path};
 
 pub fn use_version(version: &str) {
-    let jdks = detect_jdks();
+    let jdks = &memory().jdks;
     for jdk in jdks {
         if jdk.file_name().unwrap().to_string_lossy().contains(version) {
             let symlink = get_symlink_path();
@@ -15,7 +16,7 @@ pub fn use_version(version: &str) {
 }
 
 pub fn use_version_local(version: &str) {
-    let jdks = detect_jdks();
+    let jdks = &memory().jdks;
     for jdk in jdks {
         if jdk.file_name().unwrap().to_string_lossy().contains(version) {
             println!("Using local version automatically in not supported on cmd.");

@@ -1,5 +1,8 @@
+use std::fs;
+
 use crate::{
     jdk_resolver::detect_jdks,
+    memory::{memory, memory_file},
     symlinks::{create_symlink, get_symlink_path},
 };
 
@@ -17,6 +20,13 @@ pub fn setup() {
     } else {
         println!("No JDKs found.");
     }
+
+    //Initiliazing memory
+    let memory_file = memory_file();
+    if memory_file.is_file() {
+        fs::remove_file(memory_file).unwrap();
+    }
+    let _ = memory();
 
     println!("\n✅ Setup complete.");
     if cfg!(target_os = "windows") {

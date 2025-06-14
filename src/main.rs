@@ -1,5 +1,8 @@
+mod app_dirs;
+mod config;
 mod jdk_resolver;
 mod list_command;
+mod memory;
 mod setup_command;
 mod symlinks;
 mod use_command;
