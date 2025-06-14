@@ -8,6 +8,7 @@ mod symlinks;
 mod use_command;
 
 use clap::{Parser, Subcommand};
+use config::get_config_path;
 use list_command::list_versions;
 use setup_command::setup;
 use use_command::{use_version, use_version_local};
@@ -28,6 +29,15 @@ enum Commands {
         local: bool,
     },
     List,
+    Config {
+        #[command(subcommand)]
+        config: Config,
+    },
+}
+
+#[derive(Subcommand)]
+enum Config {
+    Path,
 }
 
 fn main() {
@@ -43,5 +53,8 @@ fn main() {
             }
         }
         Commands::List => list_versions(),
+        Commands::Config { config } => match config {
+            Config::Path => println!("{}", get_config_path().to_string_lossy()),
+        },
     }
 }

@@ -3,21 +3,15 @@ use std::{
     sync::OnceLock,
 };
 
+use crate::config::config;
+
 static JDKS: OnceLock<Vec<PathBuf>> = OnceLock::new();
 
 pub fn detect_jdks() -> &'static Vec<PathBuf> {
     JDKS.get_or_init(|| {
+        let config = config();
         let mut jdks = Vec::new();
-        let candidates = if cfg!(target_os = "windows") {
-            vec![
-                "C:\\Program Files\\Java",
-                "C:\\dev\\interpreteur_compilateur\\Java",
-            ]
-        } else if cfg!(target_os = "macos") {
-            vec!["/Library/Java/JavaVirtualMachines"]
-        } else {
-            vec!["/usr/lib/jvm"]
-        };
+        let candidates = &config.setup_dirs;
 
         for base in candidates {
             let path = Path::new(base);

@@ -5,8 +5,8 @@ pub fn list_versions() {
     let current_link = get_symlink_path();
     let current = std::fs::read_link(&current_link).ok();
 
-    for jdk in memory().jdks.to_owned() {
-        let is_current = Some(&jdk) == current.as_ref();
+    for jdk in &memory().jdks {
+        let is_current = Some(jdk) == current.as_ref();
         let marker = if is_current { "→" } else { " " };
         println!("{} {}", marker, jdk.display());
     }
