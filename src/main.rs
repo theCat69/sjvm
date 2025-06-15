@@ -41,7 +41,6 @@ enum Config {
 }
 
 fn main() {
-    tracing_config::init!();
     let cli = Cli::parse();
 
     match cli.command {
