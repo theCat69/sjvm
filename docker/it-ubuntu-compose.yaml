@@ -1,13 +1,13 @@
 name: it-ubuntu-sjvm
 
 services:
-  rustcli:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
+  sjvm-it:
+    image: com.fefoucorp/sjvm:1.0.0-SNAPSHOT
     container_name: sjvm-it-ubuntu 
     working_dir: /app
     volumes:
+      - ../src:/app/src
       - ../tests:/app/tests
-    # command: sh -c "cargo test --test e2e -- --ignored && cargo test --test e2e -- --test-threads=1"
-    command: sh -c "cargo test --test e2e -- --ignored --show-output && cargo test --test e2e -- --test-threads=1 --show-output"
+      - ../test-config:/home/rustuser/.config/sjvm
+    command: sh -c "cargo test --test e2e -- --ignored && cargo test --test e2e -- --test-threads=1"
+    # command: sh -c "cargo test --test e2e -- --ignored --show-output && cargo test --test e2e -- --test-threads=1 --show-output"

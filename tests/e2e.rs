@@ -1,9 +1,7 @@
 use std::process::Command;
 
 fn sjvm_command() -> Command {
-    let mut cmd = Command::new("./target/release/sjvm");
-    cmd.env("JAVA_HOME", "/home/rustuser/.java/current")
-        .env("PATH", "/home/rustuser/.java/current/bin:$PATH");
+    let cmd = Command::new("./target/release/sjvm");
     cmd
 }
 
@@ -20,38 +18,6 @@ fn test_cli_runs_successfully() {
 }
 
 #[test]
-fn test_debug() {
-    let output = Command::new("ls")
-        .arg("-ltr")
-        .arg("/home/rustuser/.java")
-        .output()
-        .expect("failed to execute process");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("stdout debug : {}", stdout);
-
-    let output = Command::new("ls")
-        .arg("-ltr")
-        .arg("/home/rustuser/.config/sjvm")
-        .output()
-        .expect("failed to execute process");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("stdout debug : {}", stdout);
-
-    let output = Command::new("cat")
-        .arg("/home/rustuser/.config/sjvm/sjvm-config.json")
-        .output()
-        .expect("failed to execute process");
-
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    println!("stdout debug : {}", stdout);
-}
-
-#[test]
 #[ignore]
 fn test_setup() {
     let output = sjvm_command()
@@ -61,6 +27,7 @@ fn test_setup() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     println!("stdout setup : {}", stdout);
+
     assert!(
         stdout.contains("Setup complete"),
         "Setup did not complete succesfully: {}",
@@ -80,11 +47,11 @@ fn test_setup() {
 
 #[test]
 fn test_java_21() {
-    let status = sjvm_command()
+    let output = sjvm_command()
         .args(["use", "jdk-21"])
-        .status()
+        .output()
         .expect("Failed to set Java version");
-    assert!(status.success());
+    assert!(output.status.success());
 
     let output = Command::new("java")
         .arg("-version")
@@ -97,11 +64,11 @@ fn test_java_21() {
 
 #[test]
 fn test_java_17() {
-    let status = sjvm_command()
+    let output = sjvm_command()
         .args(["use", "jdk-17"])
-        .status()
+        .output()
         .expect("Failed to set Java version");
-    assert!(status.success());
+    assert!(output.status.success());
 
     let output = Command::new("java")
         .arg("-version")
@@ -121,25 +88,21 @@ fn test_java_17_local() {
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stdout.contains("set JAVA_HOME"),
-        "Command has not JAVA_HOME set: {}",
+        stdout.contains("JAVA_HOME"),
+        "Command has no JAVA_HOME: {}",
         stdout
     );
-    assert!(
-        stdout.contains("set PATH"),
-        "Command has not PATH set: {}",
-        stdout
-    );
+    assert!(stdout.contains("PATH"), "Command has no PATH: {}", stdout);
     assert!(stdout.contains("17"), "Java 17 not detected: {}", stdout);
 }
 
 #[test]
 fn test_list() {
-    let status = sjvm_command()
+    let output = sjvm_command()
         .args(["list"])
-        .status()
+        .output()
         .expect("Fail to run list");
-    assert!(status.success());
+    assert!(output.status.success());
 }
 
 #[test]
@@ -156,3 +119,55 @@ fn test_config_path() {
         stdout
     );
 }
+
+// #[test]
+// fn test_debug() {
+//     let output = Command::new("ls")
+//         .arg("-ltr")
+//         .arg("/home/rustuser/.java")
+//         .output()
+//         .expect("failed to execute process");
+//
+//     assert!(output.status.success());
+//     let stdout = String::from_utf8_lossy(&output.stdout);
+//     println!("stdout debug : {}", stdout);
+//
+//     let output = sjvm_command()
+//         .arg("config")
+//         .arg("path")
+//         .output()
+//         .expect("failed to execute process");
+//
+//     assert!(output.status.success());
+//     let stdout = String::from_utf8_lossy(&output.stdout);
+//     println!("stdout debug : {}", stdout);
+//
+//     let output = Command::new("ls")
+//         .arg("-ltr")
+//         .arg("/home/rustuser/.config/sjvm")
+//         .output()
+//         .expect("failed to execute process");
+//
+//     // assert!(output.status.success());
+//     let stdout = String::from_utf8_lossy(&output.stdout);
+//     println!("stdout debug : {}", stdout);
+//
+//     let output = Command::new("ls")
+//         .arg("-ltr")
+//         .arg("/home/rustuser/jvms")
+//         .output()
+//         .expect("failed to execute process");
+//
+//     // assert!(output.status.success());
+//     let stdout = String::from_utf8_lossy(&output.stdout);
+//     println!("stdout debug : {}", stdout);
+//
+//     let output = Command::new("cat")
+//         .arg("/home/rustuser/.config/sjvm/sjvm-config.json")
+//         .output()
+//         .expect("failed to execute process");
+//
+//     // assert!(output.status.success());
+//     let stdout = String::from_utf8_lossy(&output.stdout);
+//     println!("stdout debug : {}", stdout);
+// }

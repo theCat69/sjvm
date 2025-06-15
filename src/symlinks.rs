@@ -13,7 +13,6 @@ pub fn create_symlink(target: &Path, link: &Path) -> Result<(), anyhow::Error> {
         if cfg!(target_os = "windows") {
             std::fs::remove_dir(link).with_context(|| "Cannot remove symlink")?;
         } else {
-            println!("Remving symlink linux");
             std::fs::remove_file(link).with_context(|| "Cannot remove symlink")?;
         }
     }
