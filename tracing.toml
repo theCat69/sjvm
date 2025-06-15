@@ -11,5 +11,5 @@ ansi = true
 type = "standard_output"
 
 [filter.root]
-level = "trace"
+level = "info"
 
