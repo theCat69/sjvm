@@ -1,16 +1,9 @@
-use directories::UserDirs;
 use std::path::{Path, PathBuf};
 
+use crate::config::config;
+
 pub fn get_symlink_path() -> PathBuf {
-    if cfg!(target_os = "windows") {
-        PathBuf::from("C:\\Java\\current")
-    } else {
-        if let Some(user_dirs) = UserDirs::new() {
-            user_dirs.home_dir().join(".java").join("current")
-        } else {
-            panic!("OMG no home directories ? wtf dude")
-        }
-    }
+    PathBuf::from(&config().symlink_dir)
 }
 
 pub fn create_symlink(target: &Path, link: &Path) -> std::io::Result<()> {

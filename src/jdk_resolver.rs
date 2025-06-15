@@ -11,7 +11,7 @@ pub fn detect_jdks() -> &'static Vec<PathBuf> {
     JDKS.get_or_init(|| {
         let config = config();
         let mut jdks = Vec::new();
-        let candidates = &config.setup_dirs;
+        let candidates = &config.jdks_dirs;
 
         for base in candidates {
             let path = Path::new(base);
