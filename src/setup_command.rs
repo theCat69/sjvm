@@ -1,5 +1,7 @@
 use std::fs;
 
+use anyhow::Context;
+
 use crate::{
     jdk_resolver::detect_jdks,
     memory::{memory, memory_file},
@@ -24,7 +26,9 @@ pub fn setup() {
     //Initiliazing memory
     let memory_file = memory_file();
     if memory_file.is_file() {
-        fs::remove_file(memory_file).unwrap();
+        fs::remove_file(memory_file)
+            .with_context(|| "Cannot remove memory file")
+            .unwrap();
     }
     let _ = memory();
 

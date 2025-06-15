@@ -4,6 +4,7 @@ use std::{
     sync::OnceLock,
 };
 
+use anyhow::Context;
 use directories::UserDirs;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -56,17 +57,18 @@ fn get_default_jdks_dirs() -> Vec<String> {
 }
 
 pub fn config() -> &'static Config {
-    CONFIG.get_or_init(|| init_config())
+    CONFIG.get_or_init(|| init_config().unwrap())
 }
 
-fn init_config() -> Config {
+fn init_config() -> Result<Config, anyhow::Error> {
     let config_file = get_config_path();
     if config_file.is_file() {
-        let content = fs::read(config_file).unwrap();
-        let config: Value = serde_json::from_slice(&content).unwrap();
-        merge_config(config)
+        let content = fs::read(config_file).with_context(|| "Cannot read config file")?;
+        let config: Value =
+            serde_json::from_slice(&content).with_context(|| "Cannot deserialize config")?;
+        Ok(merge_config(config))
     } else {
-        Config::default()
+        Ok(Config::default())
     }
 }
 
