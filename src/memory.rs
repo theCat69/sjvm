@@ -1,7 +1,7 @@
 use anyhow::Context;
 use bincode::{Decode, Encode, config};
 use std::{
-    any, fs,
+    fs,
     path::{Path, PathBuf},
     sync::OnceLock,
 };
