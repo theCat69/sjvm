@@ -1,12 +1,13 @@
-version: "3.8"
+name: it-ubuntu-sjvm
 
 services:
   rustcli:
     build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: rust_cli_test
-    volumes:
-      - .:/app
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: sjvm-it-ubuntu 
     working_dir: /app
-    command: "cargo test --test e2e -- --test-threads=1"
+    volumes:
+      - ../tests:/app/tests
+    # command: sh -c "cargo test --test e2e -- --ignored && cargo test --test e2e -- --test-threads=1"
+    command: sh -c "cargo test --test e2e -- --ignored --show-output && cargo test --test e2e -- --test-threads=1 --show-output"
