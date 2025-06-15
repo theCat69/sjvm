@@ -1,0 +1,12 @@
+version: "3.8"
+
+services:
+  rustcli:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: rust_cli_test
+    volumes:
+      - .:/app
+    working_dir: /app
+    command: "cargo test --test e2e -- --test-threads=1"
