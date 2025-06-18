@@ -13,7 +13,7 @@ The user using this should have the right to read, execute and create symlinks o
 
 ### Windows 
 
-On windows you need to have developer mode on : learn.microsoft.com/fr-fr/windows/apps/get-started/enable-your-device-for-development.
+On windows you need to have developer mode on : https://learn.microsoft.com/fr-fr/windows/apps/get-started/enable-your-device-for-development.
 
 Default folder for jdks is :
 ```batch
@@ -90,6 +90,9 @@ sjvm use jdk-21
 ```
 ✅ Now using JDK: C:\dev\compilers\Java\jdk-21.0.1
 ```
+
+Sjvm will match the name of the folder you see in the list command.
+It will use the first match so name you folders accordingly.
 
 
 
