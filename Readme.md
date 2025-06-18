@@ -1,46 +1,53 @@
 # Simple Java Version Manager
 
-## Motivations :
+## Motivation
 
-I did a project few years ago to handle java version currently used on my machine and in a particuliar prompt : https://github.com/theCat69/blazingly-fast-java-version-manager.
-At the time i was just starting learning Rust and I wanted to try a different approach that the classic symlink indirection that everyone use. It worked, for most usecase but it was so complicated because my code was messy. I did not improved that much. However I wanted to do this for myself as I have been using my previous tool during those years. 
+A few years ago, I created a project to manage the Java version currently used on my machine and within a specific terminal prompt: [blazingly-fast-java-version-manager](https://github.com/theCat69/blazingly-fast-java-version-manager).
+At the time, I was just starting to learn Rust and wanted to try a different approach than the classic symlink indirection everyone uses. It worked for most use cases, but the code was messy and overly complicated. I didn’t improve it much after that.
 
-This project aims to be a minimalist and simple, multiplatform, java version manager using symlink indirection.
+However, I kept using that tool over the years and wanted to build something better for myself.
 
-## Prerequist and system rights considerations
+This project aims to be a minimalist, simple, and cross-platform Java version manager using symlink indirection.
 
-The user using this should have the right to read, execute and create symlinks of the jdks folders one wish to use with sjvm.
+## Prerequisites and Permissions
 
-### Windows 
+To use `sjvm`, you must have permission to read, execute, and create symlinks for the JDK folders you want to manage.
 
-On windows you need to have developer mode on : https://learn.microsoft.com/fr-fr/windows/apps/get-started/enable-your-device-for-development.
+### Windows
 
-Default folder for jdks is :
+On Windows, you need to have Developer Mode enabled: [enable-your-device-for-development](https://learn.microsoft.com/fr-fr/windows/apps/get-started/enable-your-device-for-development)
+
+Default JDK folder:
+
 ```batch
 C:\Java
 ```
 
-### Linux 
+### Linux
 
-On linux, if you want tu use the package from your package manager, and the user you are using can't create symlinks on them, you will need to copy them to a folder you own.
+On Linux, if you install JDKs via a package manager and your user cannot create symlinks in those locations, you’ll need to copy the JDKs to a folder you own.
 
-Default folder for jdks is :
+Default JDK folder:
+
 ```sh
 /usr/lib/jvm
 ```
-### Mac 
 
-This is not tested at all. If you try and it doesn't work you can open an issue.
+### macOS
 
-Default folder for jdks is : 
+This is not tested. If you try it and it doesn't work, feel free to open an issue.
+
+Default JDK folder:
+
 ```sh
 /Library/Java/JavaVirtualMachines
 ```
 
 ## Configuration
 
-Sjvm use Json configuration. 
-A simple configuration can look like so : 
+`sjvm` uses JSON for its configuration.
+A simple example:
+
 ```json
 {
   "jdks_dirs": [
@@ -49,20 +56,24 @@ A simple configuration can look like so :
 }
 ```
 
-You can also choose the folder sjvm will use as the main source folder of the symlink.
+You can also specify the folder `sjvm` will use as the main symlink destination:
+
 ```json
 {
-  "symlink_dir": "C:\\dev\\sjvm\\java" 
+  "symlink_dir": "C:\\dev\\sjvm\\java"
 }
 ```
 
-Configuration folder depends on your system. To get the path sjvm will use you can run the command :
+The configuration folder depends on your system. To find the path `sjvm` uses, run:
+
 ```sh
 sjvm config path
 ```
 
 ## Setup
-To setup sjvm to load all your jdks into his memory and create you symlink folder use :
+
+To load all your JDKs into memory and create the symlink folder, run:
+
 ```sh
 sjvm setup
 ```
@@ -70,30 +81,34 @@ sjvm setup
 ## Commands
 
 ### List
-List java installations managed by sjvm on your device :
+
+List Java installations managed by `sjvm` on your device:
+
 ```sh
 sjvm list
 ```
 
+Example output:
+
 ```
-C:\dev\compilers\Java\jdk-17.0.1
-C:\dev\compilers\Java\jdk-20.0.1
+C:\dev\compilers\Java\jdk-17.0.1  
+C:\dev\compilers\Java\jdk-20.0.1  
 C:\dev\compilers\Java\jdk-21.0.1
 ```
 
 ### Use
-To change java installation for your user run :
+
+To change the Java installation for your user:
+
 ```sh
 sjvm use jdk-21
 ```
+
+Example output:
 
 ```
 ✅ Now using JDK: C:\dev\compilers\Java\jdk-21.0.1
 ```
 
-Sjvm will match the name of the folder you see in the list command.
-It will use the first match so name you folders accordingly.
-
-
-
-
+`sjvm` will match the name of the folder resolved by the list command.
+It will use the first match, so name you folders accordingly.
