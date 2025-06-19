@@ -31,29 +31,27 @@ impl Default for Config {
 fn get_default_symlink_dir() -> String {
     if cfg!(target_os = "windows") {
         "C:\\Java\\current".to_string()
+    } else if let Some(user_dirs) = UserDirs::new() {
+        user_dirs
+            .home_dir()
+            .join(".java")
+            .join("current")
+            .to_string_lossy()
+            .into_owned()
     } else {
-        if let Some(user_dirs) = UserDirs::new() {
-            user_dirs
-                .home_dir()
-                .join(".java")
-                .join("current")
-                .to_string_lossy()
-                .into_owned()
-        } else {
-            panic!("OMG no home directories ? wtf dude")
-        }
+        panic!("OMG no home directories ? wtf dude")
     }
 }
 
 fn get_default_jdks_dirs() -> Vec<String> {
-    let candidates = if cfg!(target_os = "windows") {
+    
+    if cfg!(target_os = "windows") {
         vec!["C:\\Program Files\\Java".to_string()]
     } else if cfg!(target_os = "macos") {
         vec!["/Library/Java/JavaVirtualMachines".to_string()]
     } else {
         vec!["/usr/lib/jvm".to_string()]
-    };
-    candidates
+    }
 }
 
 pub fn config() -> &'static Config {
@@ -90,10 +88,10 @@ fn merge_config(config_value: Value) -> Config {
         _ => panic!("Jdks dirs should be an array"),
     };
 
-    return Config {
+    Config {
         symlink_dir,
         jdks_dirs,
-    };
+    }
 }
 
 pub fn get_config_path() -> PathBuf {

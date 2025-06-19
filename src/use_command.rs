@@ -6,7 +6,7 @@ pub fn use_version(version: &str) {
     for jdk in jdks {
         if jdk.file_name().unwrap().to_string_lossy().contains(version) {
             let symlink = get_symlink_path();
-            create_symlink(&jdk, &symlink).unwrap();
+            create_symlink(jdk, &symlink).unwrap();
             println!("✅ Now using JDK: {}", jdk.to_string_lossy());
             return;
         }

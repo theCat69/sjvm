@@ -35,10 +35,10 @@ fn lazy_init_memory() -> Result<Memory, anyhow::Error> {
             jdks: jdks.to_owned(),
         };
         dump_binaries(&memory)?;
-        return Ok(memory);
+        Ok(memory)
     } else {
         let memory = load_from_binaries()?;
-        return Ok(memory);
+        Ok(memory)
     }
 }
 
