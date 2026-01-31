@@ -144,6 +144,48 @@ fn test_interactive_command_recognized() {
     );
 }
 
+#[test]
+#[ignore]
+fn test_interactive_ui_opens_and_quits() {
+    use std::process::Stdio;
+
+    // Start the interactive UI process - it will fail due to no terminal
+    // Start the interactive UI process with proper terminal environment
+    let mut child = sjvm_command()
+        .arg("interactive")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to start interactive command");
+    // Send 'q' as a raw character to quit the interactive UI immediately
+    if let Some(stdin) = child.stdin.as_mut() {
+        use std::io::Write;
+        println!("got some stdin");
+        stdin.write_all(b"q").expect("Failed to write 'q' to stdin");
+        stdin.flush().expect("Failed to flush stdin");
+    }
+
+    // Wait for the process to finish and bind to it
+    let output = child
+        .wait_with_output()
+        .expect("Failed to wait for interactive command");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+
+    // println!("stdout: {:?}", String::from_utf8_lossy(&output.stdout));
+    // println!("sterr: {:?}", stderr);
+
+    assert!(
+        !stderr.contains("Error") && !stderr.contains("error"),
+        "Interactive UI should open and quit gracefully, {}",
+        stderr
+    );
+
+    // Should exit with error code 1 (expected for terminal error)
+    // assert_eq!(output.status.code(), Some(1));
+}
+
 // #[test]
 // fn test_debug() {
 //     let output = Command::new("ls")
