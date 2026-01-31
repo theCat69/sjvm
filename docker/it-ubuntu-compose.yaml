@@ -14,5 +14,5 @@ services:
       - ../src:/app/src
       - ../tests:/app/tests
       - ../test-config:/home/rustuser/.config/sjvm
-    command: sh -c "cargo test --test e2e -- --ignored && cargo test --test e2e -- --test-threads=1"
+    command: sh -c "cargo test --test e2e test_setup -- --ignored && cargo test --test e2e -- --skip test_setup --ignored --test-threads=1"
     # command: sh -c "cargo test --test e2e -- --ignored --show-output && cargo test --test e2e -- --test-threads=1 --show-output"

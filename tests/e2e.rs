@@ -5,6 +5,7 @@ fn sjvm_command() -> Command {
 }
 
 #[test]
+#[ignore]
 fn test_cli_runs_successfully() {
     let output = sjvm_command()
         .arg("--version")
@@ -45,6 +46,7 @@ fn test_setup() {
 }
 
 #[test]
+#[ignore]
 fn test_java_21() {
     let output = sjvm_command()
         .args(["use", "jdk-21"])
@@ -62,6 +64,7 @@ fn test_java_21() {
 }
 
 #[test]
+#[ignore]
 fn test_java_17() {
     let output = sjvm_command()
         .args(["use", "jdk-17"])
@@ -79,6 +82,7 @@ fn test_java_17() {
 }
 
 #[test]
+#[ignore]
 fn test_java_17_local() {
     let output = sjvm_command()
         .args(["use", "jdk-17", "-l"])
@@ -96,6 +100,7 @@ fn test_java_17_local() {
 }
 
 #[test]
+#[ignore]
 fn test_list() {
     let output = sjvm_command()
         .args(["list"])
@@ -105,6 +110,7 @@ fn test_list() {
 }
 
 #[test]
+#[ignore]
 fn test_config_path() {
     let output = sjvm_command()
         .args(["config", "path"])
@@ -120,6 +126,7 @@ fn test_config_path() {
 }
 
 #[test]
+#[ignore]
 fn test_interactive_command_recognized() {
     let output = sjvm_command()
         .args(["interactive", "--help"])
