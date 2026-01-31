@@ -167,7 +167,7 @@ fn test_interactive_command_recognized() {
 
 #[test]
 #[ignore]
-fn test_interactive_ui_opens_and_quits() {
+fn test_interactive_ui_java_version_switch() {
     use std::io::{Read, Write};
     use std::thread;
     use std::time::Duration;

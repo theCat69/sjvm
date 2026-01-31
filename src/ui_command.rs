@@ -239,7 +239,7 @@ mod tests {
         // Create a mock app for testing
         let mut list_state = ListState::default();
         list_state.select(Some(0));
-        
+
         App {
             items: vec![
                 JdkItem {
@@ -267,21 +267,21 @@ mod tests {
     #[test]
     fn test_app_navigation() {
         let mut app = create_test_app();
-        
+
         // Test initial selection
         assert_eq!(app.selected_index, Some(0));
         assert_eq!(app.get_selected_jdk().unwrap().display_name, "jdk-11");
-        
+
         // Test next navigation
         app.next();
         assert_eq!(app.selected_index, Some(1));
         assert_eq!(app.get_selected_jdk().unwrap().display_name, "jdk-17");
-        
+
         // Test previous navigation
         app.previous();
         assert_eq!(app.selected_index, Some(0));
         assert_eq!(app.get_selected_jdk().unwrap().display_name, "jdk-11");
-        
+
         // Test wrap around on next
         app.next(); // to index 1
         app.next(); // to index 2
@@ -292,19 +292,19 @@ mod tests {
     #[test]
     fn test_app_wrap_navigation() {
         let mut app = create_test_app();
-        
+
         // Test wrap around on previous from first item
         app.previous();
         assert_eq!(app.selected_index, Some(2)); // Should wrap to last item
         assert_eq!(app.get_selected_jdk().unwrap().display_name, "jdk-21");
     }
 
-#[test]
+    #[test]
     fn test_ui_rendering() {
         let app = create_test_app();
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
-        
+
         // This should not panic and should render UI successfully
         let result = terminal.draw(|f| ui(f, &app));
         assert!(result.is_ok(), "UI rendering should not fail");
@@ -315,27 +315,33 @@ mod tests {
         let app = create_test_app();
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
-        
+
         terminal.draw(|f| ui(f, &app)).unwrap();
-        
+
         // Check that help section is rendered by looking at buffer
         let buffer = terminal.backend().buffer();
         let content = buffer.content();
-        
+
         // Look for help text characters
         let help_found = content.iter().any(|cell: &ratatui::buffer::Cell| {
             let symbol = cell.symbol();
-            symbol.contains("Up") || symbol.contains("Down") || symbol.contains("Enter") || symbol.contains("q")
+            symbol.contains("Up")
+                || symbol.contains("Down")
+                || symbol.contains("Enter")
+                || symbol.contains("q")
         });
-        assert!(help_found, "Help text with navigation instructions should be rendered");
+        assert!(
+            help_found,
+            "Help text with navigation instructions should be rendered"
+        );
     }
 
-#[test]
+    #[test]
     fn test_list_item_rendering() {
         let app = create_test_app();
         let backend = TestBackend::new(40, 10);
         let mut terminal = Terminal::new(backend).unwrap();
-        
+
         // Just verify that rendering doesn't crash
         let result = terminal.draw(|f| ui(f, &app));
         assert!(result.is_ok(), "List item rendering should not fail");
@@ -346,33 +352,36 @@ mod tests {
         let app = create_test_app();
         let backend = TestBackend::new(40, 10);
         let mut terminal = Terminal::new(backend).unwrap();
-        
+
         terminal.draw(|f| ui(f, &app)).unwrap();
-        
+
         let buffer = terminal.backend().buffer();
         let content = buffer.content();
-        
+
         // Verify that current indicator (→) is rendered for jdk-11
-        let current_indicator_found = content.iter().any(|cell: &ratatui::buffer::Cell| {
-            cell.symbol().contains("→")
-        });
-        assert!(current_indicator_found, "Current JDK indicator (→) should be rendered");
+        let current_indicator_found = content
+            .iter()
+            .any(|cell: &ratatui::buffer::Cell| cell.symbol().contains("→"));
+        assert!(
+            current_indicator_found,
+            "Current JDK indicator (→) should be rendered"
+        );
     }
 
     #[test]
     fn test_app_selection_logic() {
         let mut app = create_test_app();
-        
+
         // Test getting selected JDK
         let selected = app.get_selected_jdk();
         assert!(selected.is_some());
         assert_eq!(selected.unwrap().display_name, "jdk-11");
-        
+
         // Test selection after navigation
         app.next();
         let selected = app.get_selected_jdk();
         assert_eq!(selected.unwrap().display_name, "jdk-17");
-        
+
         app.next();
         let selected = app.get_selected_jdk();
         assert_eq!(selected.unwrap().display_name, "jdk-21");
