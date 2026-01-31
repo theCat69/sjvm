@@ -2,6 +2,8 @@ name: it-ubuntu-sjvm
 
 services:
   sjvm-it:
+    tty: true
+    stdin_open: true
     build:
       context: ..
       dockerfile: docker/Dockerfile

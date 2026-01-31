@@ -1,7 +1,7 @@
 use std::process::Command;
 
 fn sjvm_command() -> Command {
-    Command::new("./target/release/sjvm")
+    Command::new("./target/debug/sjvm")
 }
 
 #[test]
@@ -115,6 +115,24 @@ fn test_config_path() {
     assert!(
         stdout.contains("sjvm"),
         "Fail to get config path: {}",
+        stdout
+    );
+}
+
+#[test]
+fn test_interactive_command_recognized() {
+    let output = sjvm_command()
+        .args(["interactive", "--help"])
+        .output()
+        .expect("Failed to get interactive help");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    // Should not show unrecognized subcommand error
+    assert!(
+        !stdout.contains("unrecognized subcommand") && !stdout.contains("unexpected argument"),
+        "Interactive command should be recognized: {}",
         stdout
     );
 }

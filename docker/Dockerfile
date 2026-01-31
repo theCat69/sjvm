@@ -38,6 +38,3 @@ ENV PATH="/home/rustuser/.cargo/bin:$PATH"
 
 COPY --chown=rustuser:rustuser . /app
 WORKDIR /app 
-RUN cargo build --release
-
-CMD ["/app/target/release/sjvm", "--help"]
