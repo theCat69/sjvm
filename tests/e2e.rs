@@ -4,6 +4,27 @@ fn sjvm_command() -> Command {
     Command::new("./target/debug/sjvm")
 }
 
+fn set_java_version_to(java_version: &str) {
+    let output = sjvm_command()
+        .args(["use", java_version])
+        .output()
+        .expect("Failed to set Java version");
+    assert!(output.status.success());
+}
+
+fn get_java_version() -> Option<String> {
+    let output = sjvm_command()
+        .arg("--version")
+        .output()
+        .expect("failed to execute process");
+
+    if output.status.success() {
+        return Some(String::from_utf8_lossy(&output.stdout).to_string());
+    }
+
+    None
+}
+
 #[test]
 #[ignore]
 fn test_cli_runs_successfully() {
@@ -151,6 +172,8 @@ fn test_interactive_ui_opens_and_quits() {
     use std::thread;
     use std::time::Duration;
 
+    set_java_version_to("jdk-21");
+
     // Start the interactive UI process
     let mut child = sjvm_command()
         .arg("interactive")
@@ -166,7 +189,9 @@ fn test_interactive_ui_opens_and_quits() {
     // Try to send 'q' to quit
     if let Some(stdin) = child.stdin.as_mut() {
         use std::io::Write;
-        let _ = stdin.write_all(b"q");
+        let _ = stdin.write_all(b"j");
+        let _ = stdin.write_all(b"\n");
+        // let _ = stdin.write_all(b"q");
         let _ = stdin.flush();
     }
 
@@ -174,7 +199,7 @@ fn test_interactive_ui_opens_and_quits() {
     thread::sleep(Duration::from_millis(500));
 
     // Check if process is still running, if so kill it
-    let exit_status = match child.try_wait() {
+    let _exit_status = match child.try_wait() {
         Ok(Some(status)) => status,
         Ok(None) => {
             // Process is still running, kill it
@@ -192,17 +217,11 @@ fn test_interactive_ui_opens_and_quits() {
     let stderr = String::from_utf8_lossy(&output.stderr);
 
     println!("{}", stderr);
-    println!("{:?}", exit_status.code());
 
-    // // Assert that UI fails gracefully due to terminal limitations (expected in test environment)
-    // assert!(
-    //     stderr.contains("Error running interactive UI") && stderr.contains("No such device"),
-    //     "Interactive UI should fail gracefully with terminal error in test environment, got: {}",
-    //     stderr
-    // );
-
-    // Should exit with error code due to terminal issue
-    // assert_eq!(exit_status.code(), Some(1));
+    let java_v_opt = get_java_version();
+    assert!(java_v_opt.is_some(), "Should be able to get java version");
+    let java_v = java_v_opt.unwrap();
+    assert!(java_v.contains("17"), "Java 17 not detected: {}", java_v);
 }
 
 // #[test]
