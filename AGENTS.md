@@ -19,11 +19,16 @@ cargo build --release
 # Run the CLI with built binary
 ./target/release/sjvm --help
 
-# Run unit tests only (not e2e tests)
-cargo test
+# Run unit tests only (not e2e tests) - prefer rust-mcp-server if available
+rust-mcp-server_cargo-test
+# OR alternatively: cargo test
 
-# Run a specific unit test
-cargo test test_name
+# Run a specific unit test - prefer rust-mcp-server if available
+rust-mcp-server_cargo-test --test test_name
+# OR alternatively: cargo test test_name
+
+# Run specific test in specific file
+rust-mcp-server_cargo-test --test e2e test_setup
 
 # IMPORTANT: E2E tests should ALWAYS be run using Docker compose, not directly
 # See "Integration Testing with Docker" section below for proper e2e testing
@@ -39,6 +44,18 @@ cargo clippy
 
 # Run clippy with all targets and features
 cargo clippy --all-targets --all-features
+```
+
+## Project Validation Testing
+
+To fully validate the project, you must run both unit tests and e2e tests:
+
+```bash
+# First, run unit tests
+rust-mcp-server_cargo-test
+
+# Then, run e2e tests via Docker
+docker compose -f ./docker/it-ubuntu-compose.yaml up
 ```
 
 ### Integration Testing with Docker
@@ -157,6 +174,8 @@ if cfg!(target_os = "windows") {
 ```
 
 ### Testing Guidelines
+- **Unit tests**: Use rust-mcp-server_cargo-test if available, otherwise cargo test
+- **E2E tests**: Always run via Docker compose using dedicated command
 - Integration tests in `tests/` directory
 - Use `Command::new()` for CLI testing
 - Test against real `./target/release/sjvm` binary
@@ -176,6 +195,20 @@ fn test_cli_runs_successfully() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("sjvm"));
 }
+```
+
+### Specific Test Execution
+For more targeted test execution, you can specify both test files and function names:
+
+```bash
+# Run a specific test in a specific integration test file
+cargo test --test e2e test_setup
+
+# Run specific test with ignored flag
+cargo test --test e2e test_setup -- --ignored
+
+# Run all tests in e2e file except one
+cargo test --test e2e -- --skip test_setup
 ```
 
 ## Dependencies and Their Usage
