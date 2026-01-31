@@ -45,8 +45,16 @@ cargo clippy --all-targets --all-features
 ### Integration Testing with Docker
 ```bash
 # Build and run integration tests in Docker
-cd docker
-docker-compose -f it-ubuntu-compose.yaml up --build
+docker compose -f ./docker/it-ubuntu-compose.yaml up --build
+
+# Or run in detached mode
+docker compose -f ./docker/it-ubuntu-compose.yaml up --build -d
+
+# Stop containers
+docker compose -f ./docker/it-ubuntu-compose.yaml down
+
+# View logs
+docker compose -f ./docker/it-ubuntu-compose.yaml logs -f
 ```
 
 ## Project Structure and Architecture
