@@ -2,6 +2,9 @@ name: it-ubuntu-sjvm
 
 services:
   sjvm-it:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     image: com.fefoucorp/sjvm:1.0.0-SNAPSHOT
     container_name: sjvm-it-ubuntu 
     working_dir: /app

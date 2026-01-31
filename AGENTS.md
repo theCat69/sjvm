@@ -44,11 +44,14 @@ cargo clippy --all-targets --all-features
 
 ### Integration Testing with Docker
 ```bash
-# Build and run integration tests in Docker
-docker compose -f ./docker/it-ubuntu-compose.yaml up --build
+# Run integration tests in Docker (image builds automatically)
+docker compose -f ./docker/it-ubuntu-compose.yaml up
 
 # Or run in detached mode
-docker compose -f ./docker/it-ubuntu-compose.yaml up --build -d
+docker compose -f ./docker/it-ubuntu-compose.yaml up -d
+
+# Force rebuild of the Docker image
+docker compose -f ./docker/it-ubuntu-compose.yaml up --build
 
 # Stop containers
 docker compose -f ./docker/it-ubuntu-compose.yaml down
