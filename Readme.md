@@ -1,13 +1,15 @@
-# Simple Java Version Manager
+# Simple Java Version Manager (sjvm)
+
+**sjvm** is a minimalist, cross-platform Rust-based CLI tool for managing multiple Java JDK installations using symlink indirection. Similar to tools like jenv or sdkman, but with a simpler, more focused approach.
 
 ## Motivation
 
 A few years ago, I created a project to manage the Java version currently used on my machine and within a specific terminal prompt: [blazingly-fast-java-version-manager](https://github.com/theCat69/blazingly-fast-java-version-manager).
-At the time, I was just starting to learn Rust and wanted to try a different approach than the classic symlink indirection everyone uses. It worked for most use cases, but the code was messy and overly complicated. I didn’t improve it much after that.
+At the time, I was just starting to learn Rust and wanted to try a different approach than the classic symlink indirection everyone uses. It worked for most use cases, but the code was messy and overly complicated. I didn't improve it much after that.
 
 However, I kept using that tool over the years and wanted to build something better for myself.
 
-This project aims to be a minimalist, simple, and cross-platform Java version manager using symlink indirection.
+This project aims to be a minimalist, simple, and cross-platform Java version manager using symlink indirection, built with modern Rust best practices.
 
 ## Prerequisites and Permissions
 
@@ -111,4 +113,124 @@ Example output:
 ```
 
 `sjvm` will match the name of the folder resolved by the list command.
-It will use the first match, so name you folders accordingly.
+It will use the first match, so name your folders accordingly.
+
+### Local Mode
+
+Set Java version for the current project only (creates `.java-version` file):
+
+```sh
+sjvm use jdk-21 --local
+```
+
+> ⚠️ **Windows Note**: Local mode is not yet supported on Windows. The command will show the manual steps to set the JAVA_HOME for the current session.
+
+### Config
+
+Show configuration path:
+
+```sh
+sjvm config path
+```
+
+## Development
+
+### Building
+
+```bash
+# Build the project
+cargo build
+
+# Build for release
+cargo build --release
+
+# Run the CLI
+./target/release/sjvm --help
+```
+
+### Testing
+
+```bash
+# Run unit tests
+cargo test
+
+# Run specific test
+cargo test test_name
+
+# Run all tests including integration tests
+cargo test -- --ignored
+
+# Run clippy lints
+cargo clippy
+
+# Format code
+cargo fmt
+```
+
+### End-to-End Testing with Docker
+
+The project includes comprehensive e2e tests that run in a Docker environment with multiple Java versions (11, 17, 21) pre-installed:
+
+```bash
+# Run e2e tests (Docker image builds automatically)
+docker compose -f ./docker/it-ubuntu-compose.yaml up
+
+# Run in detached mode
+docker compose -f ./docker/it-ubuntu-compose.yaml up -d
+
+# Force rebuild of the Docker image
+docker compose -f ./docker/it-ubuntu-compose.yaml up --build
+
+# View logs
+docker compose -f ./docker/it-ubuntu-compose.yaml logs -f
+
+# Stop containers
+docker compose -f ./docker/it-ubuntu-compose.yaml down
+```
+
+The Docker setup includes:
+- Ubuntu 22.04 with Java 11, 17, and 21 installed
+- Rust toolchain for building and testing
+- Volume mounts for live code updates during development
+
+## Architecture
+
+### Core Components
+
+- **CLI Interface** (`main.rs`) - Command-line parsing and routing using clap
+- **Configuration** (`config.rs`) - JSON-based configuration management with cross-platform directories
+- **JDK Resolution** (`jdk_resolver.rs`) - Automatic JDK discovery and version detection
+- **Symlink Management** (`symlinks.rs`) - Cross-platform symlink operations
+- **Memory Management** (`memory.rs`) - In-memory JDK caching and management
+- **Commands** - Individual CLI command implementations (`setup_command.rs`, `use_command.rs`, `list_command.rs`)
+
+### Configuration
+
+Configuration is stored in platform-specific directories using the `directories` crate:
+
+- **Linux**: `~/.config/sjvm/config.json`
+- **macOS**: `~/Library/Application Support/sjvm/config.json`
+- **Windows**: `%APPDATA%\sjvm\config.json`
+
+Example configuration:
+```json
+{
+  "jdks_dirs": [
+    "C:\\dev\\compilers\\java",
+    "/usr/lib/jvm",
+    "/Library/Java/JavaVirtualMachines"
+  ],
+  "symlink_dir": "C:\\dev\\sjvm\\java"
+}
+```
+
+## Requirements
+
+- Rust 1.85+ (Edition 2024)
+- Permission to create symlinks in JDK directories
+- Windows: Developer Mode enabled for symlink creation
+- Docker (for e2e testing)
+
+## License
+
+This project is open source. Feel free to contribute or report issues!
