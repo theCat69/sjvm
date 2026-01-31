@@ -13,13 +13,13 @@ fn set_java_version_to(java_version: &str) {
 }
 
 fn get_java_version() -> Option<String> {
-    let output = sjvm_command()
-        .arg("--version")
+    let output = Command::new("java")
+        .arg("-version")
         .output()
-        .expect("failed to execute process");
+        .expect("failed to run java -version");
 
     if output.status.success() {
-        return Some(String::from_utf8_lossy(&output.stdout).to_string());
+        return Some(String::from_utf8_lossy(&output.stderr).to_string());
     }
 
     None
@@ -168,60 +168,90 @@ fn test_interactive_command_recognized() {
 #[test]
 #[ignore]
 fn test_interactive_ui_opens_and_quits() {
-    use std::process::Stdio;
+    use std::io::{Read, Write};
     use std::thread;
     use std::time::Duration;
 
+    // Set initial Java version to jdk-21
     set_java_version_to("jdk-21");
 
-    // Start the interactive UI process
-    let mut child = sjvm_command()
-        .arg("interactive")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .expect("Failed to start interactive command");
+    // Verify initial state
+    let initial_version = get_java_version();
+    assert!(
+        initial_version.is_some() && initial_version.as_ref().unwrap().contains("21"),
+        "Java 21 should be set initially"
+    );
+
+    // Create a PTY for the interactive process
+    let (mut pty, pts) = pty_process::blocking::open().expect("Failed to open PTY");
+
+    // Set a reasonable size for the terminal
+    pty.resize(pty_process::Size::new(24, 80))
+        .expect("Failed to resize PTY");
+
+    // Spawn the interactive command with the PTY
+    let cmd = pty_process::blocking::Command::new("./target/debug/sjvm").arg("interactive");
+
+    let mut child = cmd.spawn(pts).expect("Failed to spawn interactive command");
 
     // Give the TUI time to initialize
-    thread::sleep(Duration::from_millis(100));
+    thread::sleep(Duration::from_millis(300));
 
-    // Try to send 'q' to quit
-    if let Some(stdin) = child.stdin.as_mut() {
-        use std::io::Write;
-        let _ = stdin.write_all(b"j");
-        let _ = stdin.write_all(b"\n");
-        // let _ = stdin.write_all(b"q");
-        let _ = stdin.flush();
+    // Send navigation and selection commands through the PTY
+    // Send 'j' to navigate down to the next JDK version
+    pty.write_all(b"j").expect("Failed to write 'j' to PTY");
+
+    // Wait a bit for the UI to process the navigation
+    thread::sleep(Duration::from_millis(150));
+
+    // Send Enter (carriage return) to switch to the selected JDK version
+    pty.write_all(b"\r").expect("Failed to write Enter to PTY");
+
+    // Wait for the TUI to process the selection and display success message
+    thread::sleep(Duration::from_millis(1500));
+
+    // Read any output from the PTY to verify the operation
+    let mut output_buffer = vec![0u8; 4096];
+    let _bytes_read = pty.read(&mut output_buffer).ok();
+
+    // Terminate the PTY connection
+    drop(pty);
+
+    // Wait for child to finish
+    let max_wait = Duration::from_secs(5);
+    let start = std::time::Instant::now();
+    loop {
+        match child.try_wait() {
+            Ok(Some(_status)) => break,
+            Ok(None) => {
+                if start.elapsed() > max_wait {
+                    // Timeout - kill the process
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    panic!("Interactive UI did not exit within 5 seconds");
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+            Err(e) => panic!("Error checking process status: {}", e),
+        }
     }
 
-    // Wait a bit to see if process quits on its own
-    thread::sleep(Duration::from_millis(500));
+    // Verify the Java version has changed to a different version
+    let final_version = get_java_version();
+    assert!(
+        final_version.is_some(),
+        "Should be able to get java version after interactive selection"
+    );
 
-    // Check if process is still running, if so kill it
-    let _exit_status = match child.try_wait() {
-        Ok(Some(status)) => status,
-        Ok(None) => {
-            // Process is still running, kill it
-            child.kill().expect("Failed to kill process");
-            child.wait().expect("Failed to wait after kill")
-        }
-        Err(e) => panic!("Error checking process status: {}", e),
-    };
+    let final_java_v = final_version.unwrap();
+    println!("Final Java version: {}", final_java_v);
 
-    // Get output to check for errors
-    let output = child
-        .wait_with_output()
-        .expect("Failed to get process output");
-
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
-    println!("{}", stderr);
-
-    let java_v_opt = get_java_version();
-    assert!(java_v_opt.is_some(), "Should be able to get java version");
-    let java_v = java_v_opt.unwrap();
-    assert!(java_v.contains("17"), "Java 17 not detected: {}", java_v);
+    // The version should have changed from 21 to something else (17 or 11)
+    assert!(
+        final_java_v.contains("17"),
+        "Java version should have changed from 21 to 17, got: {}",
+        final_java_v
+    );
 }
 
 // #[test]
