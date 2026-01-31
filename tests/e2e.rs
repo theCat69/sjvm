@@ -1,8 +1,7 @@
 use std::process::Command;
 
 fn sjvm_command() -> Command {
-    let cmd = Command::new("./target/release/sjvm");
-    cmd
+    Command::new("./target/release/sjvm")
 }
 
 #[test]

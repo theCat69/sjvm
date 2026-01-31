@@ -44,7 +44,6 @@ fn get_default_symlink_dir() -> String {
 }
 
 fn get_default_jdks_dirs() -> Vec<String> {
-    
     if cfg!(target_os = "windows") {
         vec!["C:\\Program Files\\Java".to_string()]
     } else if cfg!(target_os = "macos") {

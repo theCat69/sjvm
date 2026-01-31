@@ -19,15 +19,14 @@ cargo build --release
 # Run the CLI with built binary
 ./target/release/sjvm --help
 
-# Run tests
+# Run unit tests only (not e2e tests)
 cargo test
 
-# Run a specific test
+# Run a specific unit test
 cargo test test_name
-cargo test test_java_21
 
-# Run ignored tests (for comprehensive integration testing)
-cargo test -- --ignored
+# IMPORTANT: E2E tests should ALWAYS be run using Docker compose, not directly
+# See "Integration Testing with Docker" section below for proper e2e testing
 
 # Check code without building
 cargo check
@@ -43,6 +42,8 @@ cargo clippy --all-targets --all-features
 ```
 
 ### Integration Testing with Docker
+**IMPORTANT: E2E tests should ALWAYS be run using Docker compose, not directly.** The Docker environment provides the proper Java versions (11, 17, 21) needed for comprehensive testing and ensures consistent test results across different environments.
+
 ```bash
 # Run integration tests in Docker (image builds automatically)
 docker compose -f ./docker/it-ubuntu-compose.yaml up
@@ -161,6 +162,7 @@ if cfg!(target_os = "windows") {
 - Test against real `./target/release/sjvm` binary
 - Use `#[ignore]` for comprehensive integration tests that require Docker
 - Assert on both success status and output content
+- **E2E tests should always be run via Docker compose** (see Integration Testing with Docker section)
 - Example:
 ```rust
 #[test]
