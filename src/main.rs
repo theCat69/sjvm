@@ -5,12 +5,14 @@ mod list_command;
 mod memory;
 mod setup_command;
 mod symlinks;
+mod ui_command;
 mod use_command;
 
 use clap::{Parser, Subcommand};
 use config::get_config_path;
 use list_command::list_versions;
 use setup_command::setup;
+use ui_command::interactive_select;
 use use_command::{use_version, use_version_local};
 
 #[derive(Parser)]
@@ -29,6 +31,7 @@ enum Commands {
         local: bool,
     },
     List,
+    Interactive,
     Config {
         #[command(subcommand)]
         config: Config,
@@ -53,6 +56,7 @@ fn main() {
             }
         }
         Commands::List => list_versions(),
+        Commands::Interactive => interactive_select(),
         Commands::Config { config } => match config {
             Config::Path => println!("{}", get_config_path().to_string_lossy()),
         },
