@@ -44,6 +44,9 @@ cargo clippy
 
 # Run clippy with all targets and features
 cargo clippy --all-targets --all-features
+
+# Run rust-analyzer for IDE support and code analysis
+rust-analyzer
 ```
 
 ## Project Validation Testing
@@ -61,6 +64,10 @@ docker compose -f ./docker/it-ubuntu-compose.yaml up
 ### Integration Testing with Docker
 **IMPORTANT: E2E tests should ALWAYS be run using Docker compose, not directly.** The Docker environment provides the proper Java versions (11, 17, 21) needed for comprehensive testing and ensures consistent test results across different environments.
 
+**Two-Phase E2E Testing:**
+1. **Setup Phase**: Creates sjvm configuration file needed for testing
+2. **Test Phase**: Runs all e2e tests except setup (with single threading)
+
 ```bash
 # Run integration tests in Docker (image builds automatically)
 docker compose -f ./docker/it-ubuntu-compose.yaml up
@@ -77,6 +84,11 @@ docker compose -f ./docker/it-ubuntu-compose.yaml down
 # View logs
 docker compose -f ./docker/it-ubuntu-compose.yaml logs -f
 ```
+
+**Expected Test Flow:**
+- First phase: `test_setup` runs to create configuration
+- Second phase: All other e2e tests run with `--test-threads=1`
+- Both phases must complete successfully for full validation
 
 ## Project Structure and Architecture
 
