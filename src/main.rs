@@ -5,6 +5,7 @@ mod list_command;
 mod memory;
 mod setup_command;
 mod symlinks;
+#[cfg(feature = "ui")]
 mod ui_command;
 mod use_command;
 
@@ -12,6 +13,7 @@ use clap::{Parser, Subcommand};
 use config::get_config_path;
 use list_command::list_versions;
 use setup_command::setup;
+#[cfg(feature = "ui")]
 use ui_command::interactive_select;
 use use_command::{use_version, use_version_local};
 
@@ -31,6 +33,7 @@ enum Commands {
         local: bool,
     },
     List,
+    #[cfg(feature = "ui")]
     Interactive,
     Config {
         #[command(subcommand)]
@@ -56,6 +59,7 @@ fn main() {
             }
         }
         Commands::List => list_versions(),
+        #[cfg(feature = "ui")]
         Commands::Interactive => interactive_select(),
         Commands::Config { config } => match config {
             Config::Path => println!("{}", get_config_path().to_string_lossy()),
