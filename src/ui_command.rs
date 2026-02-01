@@ -127,7 +127,7 @@ impl App {
                 item.is_current = item.path == jdk_path;
             }
 
-            // Set success message
+            // Set success message with timestamp
             self.success_message = Some(format!("Switched to {}", display_name));
             self.success_shown_at = Some(Instant::now());
 
@@ -192,38 +192,32 @@ fn run_ui() -> Result<(), anyhow::Error> {
 }
 
 fn ui(f: &mut Frame, app: &App) {
-    // Build layout based on whether we have a success message
-    let chunks = if app.success_message.is_some() {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Length(1), // Status bar
-                Constraint::Min(3),    // List
-                Constraint::Length(3), // Help
-            ])
-            .split(f.area())
-    } else {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .constraints([
-                Constraint::Min(3),    // List
-                Constraint::Length(3), // Help
-            ])
-            .split(f.area())
-    };
+    // Fixed layout with permanent status bar at top
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(3), // Status bar (always visible)
+            Constraint::Min(3),    // List
+            Constraint::Length(3), // Help
+        ])
+        .split(f.area());
 
-    // Render status bar if there's a success message
-    let (list_chunk, help_chunk) = if let Some(ref message) = app.success_message {
-        let status_line = Line::from(vec![
+    // Render status bar (styled like Help section)
+    let status_content = if let Some(ref message) = app.success_message {
+        Line::from(vec![
             ratatui::text::Span::styled("✓ ", Style::default().fg(Color::Green)),
             ratatui::text::Span::raw(message),
-        ]);
-        let status = Paragraph::new(status_line);
-        f.render_widget(status, chunks[0]);
-        (chunks[1], chunks[2])
+        ])
     } else {
-        (chunks[0], chunks[1])
+        Line::from("")
     };
+
+    let status = Paragraph::new(status_content).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title("SJVM - A simple Java version manager"),
+    );
+    f.render_widget(status, chunks[0]);
 
     let items: Vec<ListItem> = app
         .items
@@ -249,7 +243,7 @@ fn ui(f: &mut Frame, app: &App) {
         )
         .highlight_symbol(">> ");
 
-    f.render_stateful_widget(list, list_chunk, &mut app.list_state.clone());
+    f.render_stateful_widget(list, chunks[1], &mut app.list_state.clone());
 
     let help_text = vec![Line::from(
         "↑/k: Up   ↓/j: Down   Enter: Select   q/Esc: Quit",
@@ -257,7 +251,7 @@ fn ui(f: &mut Frame, app: &App) {
 
     let help =
         Paragraph::new(help_text).block(Block::default().borders(Borders::ALL).title("Help"));
-    f.render_widget(help, help_chunk);
+    f.render_widget(help, chunks[2]);
 }
 
 pub fn interactive_select() {
