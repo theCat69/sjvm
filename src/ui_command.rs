@@ -14,7 +14,7 @@ use ratatui::{
 };
 use std::io;
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::memory::memory;
 use crate::symlinks::{create_symlink, get_symlink_path};
@@ -24,6 +24,8 @@ struct App {
     list_state: ListState,
     selected_index: Option<usize>,
     current_jdk: Option<PathBuf>,
+    success_message: Option<String>,
+    success_shown_at: Option<Instant>,
 }
 
 #[derive(Clone)]
@@ -73,6 +75,8 @@ impl App {
             list_state,
             selected_index,
             current_jdk,
+            success_message: None,
+            success_shown_at: None,
         })
     }
 
@@ -113,6 +117,7 @@ impl App {
     fn switch_to_selected(&mut self) -> Result<bool, anyhow::Error> {
         if let Some(jdk_item) = self.get_selected_jdk() {
             let jdk_path = jdk_item.path.clone();
+            let display_name = jdk_item.display_name.clone();
             let symlink = get_symlink_path();
             create_symlink(&jdk_path, &symlink)?;
             self.current_jdk = Some(jdk_path.clone());
@@ -122,9 +127,22 @@ impl App {
                 item.is_current = item.path == jdk_path;
             }
 
+            // Set success message
+            self.success_message = Some(format!("Switched to {}", display_name));
+            self.success_shown_at = Some(Instant::now());
+
             return Ok(true);
         }
         Ok(false)
+    }
+
+    fn clear_expired_success(&mut self) {
+        if let Some(shown_at) = self.success_shown_at
+            && shown_at.elapsed() > Duration::from_secs(2)
+        {
+            self.success_message = None;
+            self.success_shown_at = None;
+        }
     }
 }
 
@@ -138,6 +156,9 @@ fn run_ui() -> Result<(), anyhow::Error> {
     let mut app = App::new()?;
 
     loop {
+        // Clear expired success message
+        app.clear_expired_success();
+
         terminal.draw(|f| ui(f, &app))?;
 
         if event::poll(Duration::from_millis(100))?
@@ -152,19 +173,7 @@ fn run_ui() -> Result<(), anyhow::Error> {
                 KeyCode::Up | KeyCode::Char('k') => app.previous(),
                 KeyCode::Down | KeyCode::Char('j') => app.next(),
                 KeyCode::Enter => {
-                    if app.switch_to_selected()? {
-                        // Success - show brief message and exit
-                        terminal.draw(|f| {
-                            let area = f.area();
-                            let msg = Paragraph::new("✅ Successfully switched to selected JDK")
-                                .style(Style::default().fg(Color::Green))
-                                .block(Block::default().borders(Borders::ALL));
-                            f.render_widget(msg, area);
-                        })?;
-
-                        std::thread::sleep(Duration::from_secs(1));
-                        break;
-                    }
+                    app.switch_to_selected()?;
                 }
                 _ => {}
             }
@@ -183,10 +192,38 @@ fn run_ui() -> Result<(), anyhow::Error> {
 }
 
 fn ui(f: &mut Frame, app: &App) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([Constraint::Min(3), Constraint::Length(3)].as_ref())
-        .split(f.area());
+    // Build layout based on whether we have a success message
+    let chunks = if app.success_message.is_some() {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Length(1), // Status bar
+                Constraint::Min(3),    // List
+                Constraint::Length(3), // Help
+            ])
+            .split(f.area())
+    } else {
+        Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([
+                Constraint::Min(3),    // List
+                Constraint::Length(3), // Help
+            ])
+            .split(f.area())
+    };
+
+    // Render status bar if there's a success message
+    let (list_chunk, help_chunk) = if let Some(ref message) = app.success_message {
+        let status_line = Line::from(vec![
+            ratatui::text::Span::styled("✓ ", Style::default().fg(Color::Green)),
+            ratatui::text::Span::raw(message),
+        ]);
+        let status = Paragraph::new(status_line);
+        f.render_widget(status, chunks[0]);
+        (chunks[1], chunks[2])
+    } else {
+        (chunks[0], chunks[1])
+    };
 
     let items: Vec<ListItem> = app
         .items
@@ -212,7 +249,7 @@ fn ui(f: &mut Frame, app: &App) {
         )
         .highlight_symbol(">> ");
 
-    f.render_stateful_widget(list, chunks[0], &mut app.list_state.clone());
+    f.render_stateful_widget(list, list_chunk, &mut app.list_state.clone());
 
     let help_text = vec![Line::from(
         "↑/k: Up   ↓/j: Down   Enter: Select   q/Esc: Quit",
@@ -220,7 +257,7 @@ fn ui(f: &mut Frame, app: &App) {
 
     let help =
         Paragraph::new(help_text).block(Block::default().borders(Borders::ALL).title("Help"));
-    f.render_widget(help, chunks[1]);
+    f.render_widget(help, help_chunk);
 }
 
 pub fn interactive_select() {
@@ -261,6 +298,8 @@ mod tests {
             list_state,
             selected_index: Some(0),
             current_jdk: Some(PathBuf::from("/test/jdk-11")),
+            success_message: None,
+            success_shown_at: None,
         }
     }
 
