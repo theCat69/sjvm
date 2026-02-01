@@ -16,8 +16,9 @@ use std::io;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
+use crate::jdk_switcher::{get_jdk_display_name, switch_to_jdk};
 use crate::memory::memory;
-use crate::symlinks::{create_symlink, get_symlink_path};
+use crate::symlinks::get_symlink_path;
 
 struct App {
     items: Vec<JdkItem>,
@@ -49,11 +50,7 @@ impl App {
 
         for (index, jdk) in jdks.iter().enumerate() {
             let is_current = jdk == &current;
-            let display_name = jdk
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
+            let display_name = get_jdk_display_name(jdk);
 
             if is_current {
                 selected_index = Some(index);
@@ -118,8 +115,7 @@ impl App {
         if let Some(jdk_item) = self.get_selected_jdk() {
             let jdk_path = jdk_item.path.clone();
             let display_name = jdk_item.display_name.clone();
-            let symlink = get_symlink_path();
-            create_symlink(&jdk_path, &symlink)?;
+            switch_to_jdk(&jdk_path)?;
             self.current_jdk = Some(jdk_path.clone());
 
             // Update current status

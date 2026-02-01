@@ -1,6 +1,7 @@
 mod app_dirs;
 mod config;
 mod jdk_resolver;
+mod jdk_switcher;
 mod list_command;
 mod memory;
 mod setup_command;

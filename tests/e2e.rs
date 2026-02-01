@@ -148,11 +148,11 @@ fn test_config_path() {
 
 #[test]
 #[ignore]
-fn test_interactive_command_recognized() {
+fn test_ui_command_recognized() {
     let output = sjvm_command()
-        .args(["interactive", "--help"])
+        .args(["ui", "--help"])
         .output()
-        .expect("Failed to get interactive help");
+        .expect("Failed to get ui help");
 
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -160,14 +160,14 @@ fn test_interactive_command_recognized() {
     // Should not show unrecognized subcommand error
     assert!(
         !stdout.contains("unrecognized subcommand") && !stdout.contains("unexpected argument"),
-        "Interactive command should be recognized: {}",
+        "ui command should be recognized: {}",
         stdout
     );
 }
 
 #[test]
 #[ignore]
-fn test_interactive_ui_java_version_switch() {
+fn test_ui_java_version_switch() {
     use std::io::{Read, Write};
     use std::thread;
     use std::time::Duration;
@@ -182,17 +182,17 @@ fn test_interactive_ui_java_version_switch() {
         "Java 21 should be set initially"
     );
 
-    // Create a PTY for the interactive process
+    // Create a PTY for the ui process
     let (mut pty, pts) = pty_process::blocking::open().expect("Failed to open PTY");
 
     // Set a reasonable size for the terminal
     pty.resize(pty_process::Size::new(24, 80))
         .expect("Failed to resize PTY");
 
-    // Spawn the interactive command with the PTY
-    let cmd = pty_process::blocking::Command::new("./target/debug/sjvm").arg("interactive");
+    // Spawn the ui command with the PTY
+    let cmd = pty_process::blocking::Command::new("./target/debug/sjvm").arg("ui");
 
-    let mut child = cmd.spawn(pts).expect("Failed to spawn interactive command");
+    let mut child = cmd.spawn(pts).expect("Failed to spawn ui command");
 
     // Give the TUI time to initialize
     thread::sleep(Duration::from_millis(300));
@@ -228,7 +228,7 @@ fn test_interactive_ui_java_version_switch() {
                     // Timeout - kill the process
                     let _ = child.kill();
                     let _ = child.wait();
-                    panic!("Interactive UI did not exit within 5 seconds");
+                    panic!("UI did not exit within 5 seconds");
                 }
                 thread::sleep(Duration::from_millis(100));
             }
@@ -240,7 +240,7 @@ fn test_interactive_ui_java_version_switch() {
     let final_version = get_java_version();
     assert!(
         final_version.is_some(),
-        "Should be able to get java version after interactive selection"
+        "Should be able to get java version after ui selection"
     );
 
     let final_java_v = final_version.unwrap();
