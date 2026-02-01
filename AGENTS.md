@@ -1,153 +1,116 @@
 # AGENTS.md
 
-This file provides guidelines and commands for agentic coding agents working on the sjvm (Simple Java Version Manager) project.
+Guidelines for AI agents working on **sjvm** - a Rust CLI for managing Java JDK installations via symlinks.
 
-## Project Overview
+## Build & Lint Commands
 
-**sjvm** is a Rust-based CLI tool for managing multiple Java JDK installations using symlink indirection. It's a minimalist, cross-platform Java version manager similar to tools like jenv or sdkman, but with a simpler symlink-based approach.
-
-## Build, Test, and Development Commands
-
-### Core Commands
 ```bash
-# Build the project
-cargo build
+# Use rust-mcp-server tools when available (preferred)
+rust-mcp-server_cargo-check    # Fast type checking
+rust-mcp-server_cargo-clippy   # Linting  
+rust-mcp-server_cargo-fmt      # Format code
+rust-mcp-server_cargo-build    # Build project
 
-# Build for release
-cargo build --release
-
-# Run the CLI with built binary
-./target/release/sjvm --help
-
-# Run unit tests only (not e2e tests) - prefer rust-mcp-server if available
-rust-mcp-server_cargo-test
-# OR alternatively: cargo test
-
-# Run a specific unit test - prefer rust-mcp-server if available
-rust-mcp-server_cargo-test --test test_name
-# OR alternatively: cargo test test_name
-
-# Run specific test in specific file
-rust-mcp-server_cargo-test --test e2e test_setup
-
-# IMPORTANT: E2E tests should ALWAYS be run using Docker compose, not directly
-# See "Integration Testing with Docker" section below for proper e2e testing
-
-# Check code without building
-cargo check
-
-# Format code
-cargo fmt
-
-# Run clippy lints
-cargo clippy
-
-# Run clippy with all targets and features
-cargo clippy --all-targets --all-features
-
-# Run rust-analyzer for IDE support and code analysis
-rust-analyzer
+# Alternative commands
+cargo build                    # Debug build
+cargo build --release          # Release build
 ```
 
-## Project Validation Testing
+## Testing Strategy
 
-To fully validate the project, you must run both unit tests and e2e tests:
+### Unit Tests (Standard Development)
+
+**Always use `rust-mcp-server_cargo-test` for unit testing.**
 
 ```bash
-# First, run unit tests
-rust-mcp-server_cargo-test
-
-# Then, run e2e tests via Docker
-docker compose -f ./docker/it-ubuntu-compose.yaml up
+rust-mcp-server_cargo-test                        # Run all unit tests
+rust-mcp-server_cargo-test --testname test_name   # Run specific test
 ```
 
-### Integration Testing with Docker
-**IMPORTANT: E2E tests should ALWAYS be run using Docker compose, not directly.** The Docker environment provides the proper Java versions (11, 17, 21) needed for comprehensive testing and ensures consistent test results across different environments.
+Unit tests are in `#[cfg(test)]` modules within source files (e.g., `src/ui_command.rs`).
 
-**Two-Phase E2E Testing:**
-1. **Setup Phase**: Creates sjvm configuration file needed for testing
-2. **Test Phase**: Runs all e2e tests except setup (with single threading)
+### E2E Tests (Special Task - Separate Workflow)
+
+**E2E tests are NOT part of standard development.** They require Docker and are worked on separately.
 
 ```bash
-# Run integration tests in Docker (image builds automatically)
-docker compose -f ./docker/it-ubuntu-compose.yaml up
-
-# Or run in detached mode
-docker compose -f ./docker/it-ubuntu-compose.yaml up -d
-
-# Force rebuild of the Docker image
+# Run ONLY via Docker when specifically requested
 docker compose -f ./docker/it-ubuntu-compose.yaml up --build
-
-# Stop containers
 docker compose -f ./docker/it-ubuntu-compose.yaml down
-
-# View logs
-docker compose -f ./docker/it-ubuntu-compose.yaml logs -f
 ```
 
-**Expected Test Flow:**
-- First phase: `test_setup` runs to create configuration
-- Second phase: All other e2e tests run with `--test-threads=1`
-- Both phases must complete successfully for full validation
+**Never run e2e tests directly** - they need Docker with Java 11/17/21.
 
-## Project Structure and Architecture
+## Project Structure
 
-### Core Modules
-- `main.rs` - CLI entry point and command routing using clap
-- `config.rs` - Configuration management with JSON persistence
-- `jdk_resolver.rs` - JDK discovery and version detection
-- `symlinks.rs` - Cross-platform symlink operations
-- `memory.rs` - In-memory JDK management and caching
-- `*_command.rs` - Individual CLI command implementations
+```
+src/
+├── main.rs           # CLI entry (clap Parser/Subcommand)
+├── config.rs         # JSON config with OnceLock singleton
+├── jdk_resolver.rs   # JDK discovery
+├── symlinks.rs       # Cross-platform symlink ops
+├── memory.rs         # Binary cache (bincode)
+├── app_dirs.rs       # Platform directories
+├── ui_command.rs     # Interactive TUI (ratatui)
+├── *_command.rs      # CLI command implementations
+tests/e2e.rs          # Integration tests (Docker-only)
+```
 
-### Module Organization
-- Each CLI command has its own module file (e.g., `use_command.rs`, `list_command.rs`)
-- Shared utilities are in dedicated modules (`app_dirs.rs`, `symlinks.rs`)
-- Configuration is centralized in `config.rs` with singleton pattern using `OnceLock`
+## Code Style
 
-## Code Style Guidelines
-
-### Imports and Dependencies
+### Import Order
 ```rust
-// Standard library imports first, grouped alphabetically
-use std::{
-    fs,
-    path::{Path, PathBuf},
-    sync::OnceLock,
-};
+// 1. Standard library (grouped)
+use std::{fs, path::{Path, PathBuf}, sync::OnceLock};
 
-// External crates second, grouped by crate
+// 2. External crates
 use anyhow::Context;
 use clap::{Parser, Subcommand};
-use serde::{Deserialize, Serialize};
 
-// Local modules last
+// 3. Local modules
 use crate::config::config;
-use crate::symlinks::create_symlink;
 ```
 
 ### Naming Conventions
-- **Modules**: snake_case (e.g., `jdk_resolver.rs`, `use_command.rs`)
-- **Functions**: snake_case (e.g., `use_version()`, `get_symlink_path()`)
-- **Structs**: PascalCase (e.g., `Config`, `Cli`, `Commands`)
-- **Constants**: SCREAMING_SNAKE_CASE (e.g., `CONFIG`)
-- **File names**: snake_case with underscores
+- **Modules/Functions/Files**: `snake_case` (`jdk_resolver.rs`, `use_version()`)
+- **Structs/Enums**: `PascalCase` (`Config`, `Commands`)
+- **Statics**: `SCREAMING_SNAKE_CASE` (`static CONFIG: OnceLock`)
 
 ### Error Handling
-- Use `anyhow` for error handling with context
-- Use `with_context()` for descriptive error messages
-- Prefer `Result<T, anyhow::Error>` return types
-- Use `unwrap()` only in main command functions where panic is acceptable
-- Example:
 ```rust
-std::fs::remove_file(link).with_context(|| "Cannot remove symlink")?;
+use anyhow::Context;
+
+// Use with_context for descriptive errors
+fs::read(path).with_context(|| "Cannot read config file")?;
+
+// Return Result<T, anyhow::Error> from fallible functions
+pub fn create_symlink(target: &Path, link: &Path) -> Result<(), anyhow::Error>
+
+// unwrap() acceptable in main command functions only
 ```
 
-### CLI Structure with Clap
-- Use derive macros for CLI parsing
-- Commands are structured as subcommands
-- Use descriptive `about` text
-- Example:
+### Singleton Pattern
+```rust
+static CONFIG: OnceLock<Config> = OnceLock::new();
+
+pub fn config() -> &'static Config {
+    CONFIG.get_or_init(|| init_config().unwrap())
+}
+```
+
+### Platform-Specific Code
+```rust
+#[cfg(target_os = "windows")]
+std::os::windows::fs::symlink_dir(target, link)?;
+
+#[cfg(unix)]
+std::os::unix::fs::symlink(target, link)?;
+
+// Runtime check
+if cfg!(target_os = "windows") { /* Windows */ } else { /* Unix */ }
+```
+
+### CLI Structure (Clap Derive)
 ```rust
 #[derive(Parser)]
 #[command(name = "sjvm", version = "1.0", about = "Java version manager")]
@@ -164,121 +127,41 @@ enum Commands {
 }
 ```
 
-### Configuration Management
-- Use JSON for configuration with `serde`
-- Provide sensible defaults with `Default` trait
-- Use `OnceLock` for singleton configuration pattern
-- Cross-platform config directories using `directories` crate
-- Configuration merge strategy: defaults + user overrides
-
-### Platform-Specific Code
-- Use conditional compilation for platform differences
+### User Feedback
 ```rust
-#[cfg(target_os = "windows")]
-// Windows-specific code
-
-#[cfg(unix)]
-// Unix-specific code
-
-if cfg!(target_os = "windows") {
-    // Runtime platform check
-}
+println!("✅ Now using JDK: {}", jdk.to_string_lossy());
+println!("❌ JDK version '{}' not found.", version);
 ```
 
-### Testing Guidelines
-- **Unit tests**: Use rust-mcp-server_cargo-test if available, otherwise cargo test
-- **E2E tests**: Always run via Docker compose using dedicated command
-- Integration tests in `tests/` directory
-- Use `Command::new()` for CLI testing
-- Test against real `./target/release/sjvm` binary
-- Use `#[ignore]` for comprehensive integration tests that require Docker
-- Assert on both success status and output content
-- **E2E tests should always be run via Docker compose** (see Integration Testing with Docker section)
-- Example:
-```rust
-#[test]
-fn test_cli_runs_successfully() {
-    let output = Command::new("./target/release/sjvm")
-        .arg("--version")
-        .output()
-        .expect("failed to execute process");
-    
-    assert!(output.status.success());
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("sjvm"));
-}
-```
+## Key Dependencies
 
-### Specific Test Execution
-For more targeted test execution, you can specify both test files and function names:
+| Crate | Purpose |
+|-------|---------|
+| `clap` | CLI parsing (derive) |
+| `anyhow` | Error handling |
+| `serde`/`serde_json` | JSON config |
+| `bincode` | Binary cache |
+| `directories` | Cross-platform paths |
+| `ratatui`/`crossterm` | Terminal UI |
+
+## Avoid
+
+- Running e2e tests directly (use Docker)
+- Using `panic!()` in library code (return `Result`)
+- Hardcoding paths (use platform detection)
+- Adding heavy dependencies without justification
+
+## Environment
+
+- **Rust Edition**: 2024 | **Min Version**: 1.85
+- **E2E Docker**: Ubuntu 22.04 with Java 11, 17, 21
+
+## Quick Reference
 
 ```bash
-# Run a specific test in a specific integration test file
-cargo test --test e2e test_setup
+# Standard workflow
+rust-mcp-server_cargo-check && rust-mcp-server_cargo-test && rust-mcp-server_cargo-clippy
 
-# Run specific test with ignored flag
-cargo test --test e2e test_setup -- --ignored
-
-# Run all tests in e2e file except one
-cargo test --test e2e -- --skip test_setup
+# Build and run
+cargo build && ./target/debug/sjvm --help
 ```
-
-## Dependencies and Their Usage
-
-### Core Dependencies
-- `clap` v4.5 - CLI parsing with derive features
-- `anyhow` v1.0 - Error handling with context
-- `serde` v1.0 - JSON serialization/deserialization
-- `directories` v6 - Cross-platform config directories
-- `walkdir` v2.5 - Directory traversal for JDK discovery
-
-### When Adding Dependencies
-1. Check if functionality can be implemented with std library first
-2. Prefer minimal, well-maintained crates
-3. Update `Cargo.toml` with exact versions when possible
-4. Consider cross-platform compatibility
-
-## Code Patterns to Follow
-
-### Singleton Pattern for Configuration
-```rust
-static CONFIG: OnceLock<Config> = OnceLock::new();
-
-pub fn config() -> &'static Config {
-    CONFIG.get_or_init(|| init_config().unwrap())
-}
-```
-
-### Path Operations
-- Use `PathBuf` for owned paths
-- Use `to_string_lossy()` for display
-- Use `with_context()` for file operation errors
-
-### User Output
-- Use emojis for visual feedback (✅ ❌)
-- Provide clear error messages
-- Show commands to run on Windows when local mode isn't supported
-
-## Things to Avoid
-
-- Don't commit `.gitignore` changes unless necessary
-- Don't add complex external dependencies without discussion
-- Don't use `panic!()` in library code - prefer `Result`
-- Don't hardcode platform-specific paths without feature gates
-- Don't ignore cross-platform compatibility
-
-## Development Environment
-
-- Rust edition 2024
-- Minimum Rust version: 1.85 (edition 2024)
-- Test environment: Docker Ubuntu 22.04 with Java 11, 17, 21
-- Integration testing requires Docker setup
-
-## File Organization
-
-- Keep CLI commands in separate modules
-- One public struct/function per module when possible
-- Use module-level documentation (///) for public APIs
-- Keep integration tests separate from unit tests
-
-This project follows a minimalist philosophy while maintaining robust cross-platform support and comprehensive testing.
