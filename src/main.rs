@@ -34,7 +34,7 @@ enum Commands {
     },
     List,
     #[cfg(feature = "ui")]
-    Interactive,
+    Ui,
     Config {
         #[command(subcommand)]
         config: Config,
@@ -60,7 +60,7 @@ fn main() {
         }
         Commands::List => list_versions(),
         #[cfg(feature = "ui")]
-        Commands::Interactive => interactive_select(),
+        Commands::Ui => interactive_select(),
         Commands::Config { config } => match config {
             Config::Path => println!("{}", get_config_path().to_string_lossy()),
         },
