@@ -18,7 +18,7 @@ pub(crate) fn setup() -> anyhow::Result<()> {
 
     if let Some(parent) = symlink.parent() {
         fs::create_dir_all(parent)
-            .with_context(|| format!("failed to create parent directory {:?}", parent))?;
+            .with_context(|| format!("failed to create parent directory {parent:?}"))?;
     }
 
     let jdks = detect_jdks();

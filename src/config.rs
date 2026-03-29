@@ -88,17 +88,11 @@ fn init_config() -> anyhow::Result<Config> {
 
 fn validate_no_traversal(p: &str, field: &str) -> anyhow::Result<()> {
     if p.contains('\0') {
-        bail!(
-            "config field '{}' contains a NUL byte which is not allowed",
-            field
-        );
+        bail!("config field '{field}' contains a NUL byte which is not allowed");
     }
     let path = PathBuf::from(p);
     if path.components().any(|c| c == Component::ParentDir) {
-        bail!(
-            "config field '{}' contains path traversal ('..') which is not allowed",
-            field
-        );
+        bail!("config field '{field}' contains path traversal ('..') which is not allowed");
     }
     Ok(())
 }
@@ -145,7 +139,7 @@ fn merge_config(config_value: Value) -> anyhow::Result<Config> {
             for (i, value) in arr.iter().enumerate() {
                 let s = value
                     .as_str()
-                    .ok_or_else(|| anyhow::anyhow!("jdks_dirs[{}] is not a string", i))?;
+                    .ok_or_else(|| anyhow::anyhow!("jdks_dirs[{i}] is not a string"))?;
                 let field_name = format!("jdks_dirs[{i}]");
                 validate_no_traversal(s, &field_name)?;
                 #[cfg(unix)]
