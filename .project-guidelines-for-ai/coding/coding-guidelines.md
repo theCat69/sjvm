@@ -1,6 +1,6 @@
 # Coding Guidelines
 
-This document defines the coding conventions for **sjvm** — a Rust 2024 edition CLI for managing Java JDK installations via symlinks. All guidelines apply to Rust 2024 edition, MSRV 1.86.
+This document defines the coding conventions for **sjvm** — a Rust 2024 edition CLI for managing Java JDK installations via symlinks. All guidelines apply to Rust 2024 edition, MSRV 1.88.
 
 ---
 

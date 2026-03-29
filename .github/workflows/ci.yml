@@ -22,7 +22,7 @@ jobs:
       - name: Install Rust (MSRV)
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: "1.86"
+          toolchain: "1.88"
           components: rustfmt, clippy
 
       - name: Cache Cargo registry

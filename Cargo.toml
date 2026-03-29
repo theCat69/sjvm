@@ -2,7 +2,7 @@
 name = "sjvm"
 version = "0.2.0"
 edition = "2024"
-rust-version = "1.86"
+rust-version = "1.88"
 description = "Manage Java JDK installations via symlinks — fast, shell-agnostic, no daemon"
 license = "MIT"
 repository = "https://github.com/fefou/sjvm"
@@ -21,6 +21,7 @@ bincode = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0", features = ["preserve_order"] }
 anyhow = "1.0"
+time = "0.3.47"  # security pin — forces patched version; see RUSTSEC-2026-0009 / CVE-2026-25727
 ratatui = { version = "0.30.0", optional = true }
 crossterm = { version = "0.29.0", optional = true }
 
