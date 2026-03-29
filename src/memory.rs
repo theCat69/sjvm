@@ -73,5 +73,8 @@ fn current_jdk() -> anyhow::Result<&'static PathBuf> {
             return Ok(jdk);
         }
     }
-    bail!("No current JDK found. Did you run `sjvm setup` first?")
+    bail!(
+        "Active JDK '{}' is not in any configured jdks_dirs. Run 'sjvm setup' or add its parent directory to your config.",
+        current_link.display()
+    )
 }

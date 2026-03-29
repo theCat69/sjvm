@@ -29,7 +29,7 @@ fn init_app_dirs() -> anyhow::Result<AppDirs> {
 }
 
 fn init_proj_dir() -> anyhow::Result<ProjectDirs> {
-    ProjectDirs::from("rs", "", "sjvm").context("Failed to resolve platform project directories")
+    ProjectDirs::from("", "sjvm", "sjvm").context("Failed to resolve platform project directories")
 }
 
 fn ensure_dir(path: &std::path::Path) -> anyhow::Result<PathBuf> {

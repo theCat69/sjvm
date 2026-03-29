@@ -37,13 +37,8 @@ pub(crate) fn setup() -> anyhow::Result<()> {
     let _ = memory();
 
     println!("\n✅ Setup complete.");
-    if cfg!(target_os = "windows") {
-        println!("=> Add C:\\Java\\current\\bin to your PATH.");
-        println!("=> Add C:\\Java\\current as your JAVA_HOME.");
-    } else {
-        println!("=> Add $HOME/.java/current/bin to your PATH.");
-        println!("=> Add $HOME/.java/current as your JAVA_HOME.");
-    }
+    println!("=> Add {}/bin to your PATH.", symlink.display());
+    println!("=> Set JAVA_HOME={}.", symlink.display());
 
     Ok(())
 }

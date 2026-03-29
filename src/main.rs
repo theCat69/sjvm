@@ -102,7 +102,12 @@ fn main() {
             }
         }
         #[cfg(feature = "ui")]
-        Commands::Ui => interactive_select(),
+        Commands::Ui => {
+            if let Err(e) = interactive_select() {
+                eprintln!("❌ UI failed: {}", e);
+                std::process::exit(1);
+            }
+        }
         Commands::Config { config } => match config {
             ConfigCmd::Path => println!("{}", config_path().to_string_lossy()),
         },

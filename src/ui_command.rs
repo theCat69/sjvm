@@ -160,7 +160,7 @@ fn run_app_loop(terminal: &mut ratatui::DefaultTerminal) -> anyhow::Result<()> {
         // Clear expired success message
         app.clear_expired_success();
 
-        terminal.draw(|f| render_ui(f, &app))?;
+        terminal.draw(|f| render_ui(f, &mut app))?;
 
         if event::poll(Duration::from_millis(100))?
             && let Event::Key(key) = event::read()?
@@ -184,7 +184,7 @@ fn run_app_loop(terminal: &mut ratatui::DefaultTerminal) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn render_ui(f: &mut Frame, app: &App) {
+fn render_ui(f: &mut Frame, app: &mut App) {
     // Fixed layout with permanent status bar at top
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -236,7 +236,7 @@ fn render_ui(f: &mut Frame, app: &App) {
         )
         .highlight_symbol(">> ");
 
-    f.render_stateful_widget(list, chunks[1], &mut app.list_state.clone());
+    f.render_stateful_widget(list, chunks[1], &mut app.list_state);
 
     let help_text = vec![Line::from(
         "↑/k: Up   ↓/j: Down   Enter: Select   q/Esc: Quit",
@@ -248,11 +248,9 @@ fn render_ui(f: &mut Frame, app: &App) {
 }
 
 /// Launches the interactive JDK selector TUI.
-pub(crate) fn interactive_select() {
-    if let Err(e) = run_ui() {
-        eprintln!("❌ Error running interactive UI: {}", e);
-        std::process::exit(1);
-    }
+pub(crate) fn interactive_select() -> anyhow::Result<()> {
+    run_ui()?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -329,22 +327,22 @@ mod tests {
 
     #[test]
     fn test_ui_rendering() {
-        let app = create_test_app();
+        let mut app = create_test_app();
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
 
         // This should not panic and should render UI successfully
-        let result = terminal.draw(|f| render_ui(f, &app));
+        let result = terminal.draw(|f| render_ui(f, &mut app));
         assert!(result.is_ok(), "UI rendering should not fail");
     }
 
     #[test]
     fn test_ui_help_text_rendering() {
-        let app = create_test_app();
+        let mut app = create_test_app();
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        terminal.draw(|f| render_ui(f, &app)).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app)).unwrap();
 
         // Check that help section is rendered by looking at buffer
         let buffer = terminal.backend().buffer();
@@ -366,22 +364,22 @@ mod tests {
 
     #[test]
     fn test_list_item_rendering() {
-        let app = create_test_app();
+        let mut app = create_test_app();
         let backend = TestBackend::new(40, 10);
         let mut terminal = Terminal::new(backend).unwrap();
 
         // Just verify that rendering doesn't crash
-        let result = terminal.draw(|f| render_ui(f, &app));
+        let result = terminal.draw(|f| render_ui(f, &mut app));
         assert!(result.is_ok(), "List item rendering should not fail");
     }
 
     #[test]
     fn test_current_jdk_indicator() {
-        let app = create_test_app();
+        let mut app = create_test_app();
         let backend = TestBackend::new(40, 10);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        terminal.draw(|f| render_ui(f, &app)).unwrap();
+        terminal.draw(|f| render_ui(f, &mut app)).unwrap();
 
         let buffer = terminal.backend().buffer();
         let content = buffer.content();
