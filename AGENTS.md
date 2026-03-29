@@ -2,6 +2,17 @@
 
 Guidelines for AI agents working on **sjvm** - a Rust CLI for managing Java JDK installations via symlinks.
 
+Detailed guidelines have been migrated to `.project-guidelines-for-ai/`. Read those files before writing any code.
+
+- **Coding**: [`.project-guidelines-for-ai/coding/coding-guidelines.md`](.project-guidelines-for-ai/coding/coding-guidelines.md)
+- **Code examples**: [`.project-guidelines-for-ai/coding/code-examples/README.md`](.project-guidelines-for-ai/coding/code-examples/README.md)
+- **Building**: [`.project-guidelines-for-ai/building/building-guidelines.md`](.project-guidelines-for-ai/building/building-guidelines.md)
+- **Testing**: [`.project-guidelines-for-ai/testing/testing-guidelines.md`](.project-guidelines-for-ai/testing/testing-guidelines.md)
+- **Documentation**: [`.project-guidelines-for-ai/documentation/documentation-guidelines.md`](.project-guidelines-for-ai/documentation/documentation-guidelines.md)
+- **Security**: [`.project-guidelines-for-ai/security/security-guidelines.md`](.project-guidelines-for-ai/security/security-guidelines.md)
+
+---
+
 ## Build & Lint Commands
 
 ```bash
@@ -55,101 +66,6 @@ src/
 ├── *_command.rs      # CLI command implementations
 tests/e2e.rs          # Integration tests (Docker-only)
 ```
-
-## Code Style
-
-### Import Order
-```rust
-// 1. Standard library (grouped)
-use std::{fs, path::{Path, PathBuf}, sync::OnceLock};
-
-// 2. External crates
-use anyhow::Context;
-use clap::{Parser, Subcommand};
-
-// 3. Local modules
-use crate::config::config;
-```
-
-### Naming Conventions
-- **Modules/Functions/Files**: `snake_case` (`jdk_resolver.rs`, `use_version()`)
-- **Structs/Enums**: `PascalCase` (`Config`, `Commands`)
-- **Statics**: `SCREAMING_SNAKE_CASE` (`static CONFIG: OnceLock`)
-
-### Error Handling
-```rust
-use anyhow::Context;
-
-// Use with_context for descriptive errors
-fs::read(path).with_context(|| "Cannot read config file")?;
-
-// Return Result<T, anyhow::Error> from fallible functions
-pub fn create_symlink(target: &Path, link: &Path) -> Result<(), anyhow::Error>
-
-// unwrap() acceptable in main command functions only
-```
-
-### Singleton Pattern
-```rust
-static CONFIG: OnceLock<Config> = OnceLock::new();
-
-pub fn config() -> &'static Config {
-    CONFIG.get_or_init(|| init_config().unwrap())
-}
-```
-
-### Platform-Specific Code
-```rust
-#[cfg(target_os = "windows")]
-std::os::windows::fs::symlink_dir(target, link)?;
-
-#[cfg(unix)]
-std::os::unix::fs::symlink(target, link)?;
-
-// Runtime check
-if cfg!(target_os = "windows") { /* Windows */ } else { /* Unix */ }
-```
-
-### CLI Structure (Clap Derive)
-```rust
-#[derive(Parser)]
-#[command(name = "sjvm", version = "1.0", about = "Java version manager")]
-struct Cli {
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    Setup,
-    Use { version: String, #[arg(short, long)] local: bool },
-    List,
-}
-```
-
-### User Feedback
-```rust
-println!("✅ Now using JDK: {}", jdk.to_string_lossy());
-println!("❌ JDK version '{}' not found.", version);
-```
-
-## Key Dependencies
-
-| Crate | Purpose |
-|-------|---------|
-| `clap` | CLI parsing (derive) |
-| `anyhow` | Error handling |
-| `serde`/`serde_json` | JSON config |
-| `bincode` | Binary cache |
-| `directories` | Cross-platform paths |
-| `ratatui`/`crossterm` | Terminal UI |
-
-## Avoid
-
-- Running e2e tests directly (use Docker)
-- Using `panic!()` in library code (return `Result`)
-- Hardcoding paths (use platform detection)
-- Adding heavy dependencies without justification
 
 ## Environment
 
