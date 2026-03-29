@@ -3,6 +3,12 @@ name = "sjvm"
 version = "0.2.0"
 edition = "2024"
 rust-version = "1.86"
+description = "Manage Java JDK installations via symlinks — fast, shell-agnostic, no daemon"
+license = "MIT"
+repository = "https://github.com/fefou/sjvm"
+readme = "README.md"
+keywords = ["java", "jdk", "version-manager", "symlink", "cli"]
+categories = ["command-line-utilities", "development-tools"]
 
 [features]
 default = []
