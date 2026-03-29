@@ -119,3 +119,71 @@ fn current_jdk() -> anyhow::Result<&'static PathBuf> {
         current_link.display()
     )
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use bincode::config;
+
+    use super::Memory;
+
+    /// Verifies that a `Memory` value survives a bincode encode → decode round-trip
+    /// with all fields intact.
+    #[test]
+    fn test_memory_bincode_round_trip() {
+        let original = Memory {
+            current: PathBuf::from("/usr/lib/jvm/temurin-17-jdk"),
+            jdks: vec![
+                PathBuf::from("/usr/lib/jvm/temurin-11-jdk"),
+                PathBuf::from("/usr/lib/jvm/temurin-17-jdk"),
+                PathBuf::from("/usr/lib/jvm/temurin-21-jdk"),
+            ],
+        };
+
+        let encoded =
+            bincode::encode_to_vec(&original, config::standard()).expect("encode should succeed");
+
+        let (decoded, bytes_consumed): (Memory, usize) =
+            bincode::decode_from_slice(&encoded, config::standard())
+                .expect("decode should succeed");
+
+        assert_eq!(decoded, original);
+        assert_eq!(
+            bytes_consumed,
+            encoded.len(),
+            "all bytes should be consumed"
+        );
+    }
+
+    /// Verifies that an empty JDK list round-trips correctly.
+    #[test]
+    fn test_memory_bincode_round_trip_empty_jdks() {
+        let original = Memory {
+            current: PathBuf::from("/usr/lib/jvm/temurin-17-jdk"),
+            jdks: vec![],
+        };
+
+        let encoded =
+            bincode::encode_to_vec(&original, config::standard()).expect("encode should succeed");
+
+        let (decoded, _): (Memory, usize) =
+            bincode::decode_from_slice(&encoded, config::standard())
+                .expect("decode should succeed");
+
+        assert_eq!(decoded, original);
+    }
+
+    /// Verifies that corrupted bytes produce a decode error rather than silent
+    /// data corruption.
+    #[test]
+    fn test_memory_bincode_rejects_corrupted_bytes() {
+        let corrupted = vec![0xDE, 0xAD, 0xBE, 0xEF, 0x00];
+        let result: Result<(Memory, usize), _> =
+            bincode::decode_from_slice(&corrupted, config::standard());
+        assert!(
+            result.is_err(),
+            "corrupted bytes should not decode successfully"
+        );
+    }
+}

@@ -74,6 +74,60 @@ fn validate_version(s: &str) -> Result<String, String> {
     Ok(s.to_owned())
 }
 
+#[cfg(test)]
+mod tests {
+    use super::validate_version;
+
+    #[test]
+    fn test_validate_version_rejects_empty() {
+        assert!(validate_version("").is_err());
+    }
+
+    #[test]
+    fn test_validate_version_rejects_too_long() {
+        let long = "a".repeat(65);
+        assert!(validate_version(&long).is_err());
+    }
+
+    #[test]
+    fn test_validate_version_rejects_metacharacters() {
+        for bad in &["17;rm", "17$HOME", "17`id`", "17|cat", "17>out", "17("] {
+            assert!(
+                validate_version(bad).is_err(),
+                "expected error for version '{bad}'"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_version_accepts_valid_strings() {
+        for good in &[
+            "17",
+            "temurin-21",
+            "graalvm-ce-java17",
+            "1.8.0_391",
+            "zulu-8",
+        ] {
+            assert!(
+                validate_version(good).is_ok(),
+                "expected ok for version '{good}'"
+            );
+        }
+    }
+
+    #[test]
+    fn test_validate_version_returns_owned_input() {
+        let result = validate_version("17").unwrap();
+        assert_eq!(result, "17");
+    }
+
+    #[test]
+    fn test_validate_version_accepts_max_length() {
+        let exactly_64 = "a".repeat(64);
+        assert!(validate_version(&exactly_64).is_ok());
+    }
+}
+
 fn main() {
     let cli = Cli::parse();
 
