@@ -10,11 +10,25 @@
         "rust-mcp-server",
         "--log-file",
         "log/folder/rust-mcp-server.log"
-      ]
+      ],
+      "enabled": true
     }
+  },
+  "permission": {
+    "rust-mcp-server_*": "deny"
   },
   "agent": {
     "coder": {
+      "permission": {
+        "rust-mcp-server_*": "allow"
+      }
+    },
+    "build": {
+      "permission": {
+        "rust-mcp-server_*": "allow"
+      }
+    },
+    "plan": {
       "permission": {
         "rust-mcp-server_*": "allow"
       }
