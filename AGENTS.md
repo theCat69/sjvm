@@ -70,14 +70,14 @@ tests/e2e.rs          # Integration tests (Docker-only)
 
 ## Environment
 
-- **Rust Edition**: 2024 | **Min Version**: 1.86
+- **Rust Edition**: 2024 | **Min Version**: 1.88 | **Local Default Toolchain**: stable (`rust-toolchain.toml`)
 - **E2E Docker**: Ubuntu 22.04 with Java 11, 17, 21
 
 ## Quick Reference
 
 ```bash
 # Standard workflow
-rust-mcp-server_cargo-check && rust-mcp-server_cargo-test && rust-mcp-server_cargo-clippy
+rust-mcp-server_cargo-check --all-features && rust-mcp-server_cargo-test --all-features && rust-mcp-server_cargo-clippy --all-features -- -D warnings
 
 # Build and run
 cargo build && ./target/debug/sjvm --help

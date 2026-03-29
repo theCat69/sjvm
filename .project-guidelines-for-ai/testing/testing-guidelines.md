@@ -141,7 +141,7 @@ cargo test                                        # Run all unit + doc tests
 cargo test test_name                              # Run tests matching name
 cargo test --no-default-features                 # Test minimal feature set
 cargo test --features ui                          # Test with TUI feature enabled
-cargo test --all-features                         # Test all feature combinations
+cargo test --all-features                         # Main local/CI validation path
 ```
 
 ### E2E tests (Docker only — run only when specifically requested)
@@ -180,12 +180,13 @@ Focus coverage efforts on:
 
 ## CI Test Recommendations
 
-When a CI pipeline is added, run these in order:
+CI uses stable as the main quality gate and a separate MSRV 1.88 compatibility job. Recommended commands:
 
 ```bash
 cargo fmt --check              # Fail on formatting diff
 cargo check --all-features     # Fail on type errors
-cargo test                     # Fail on test failures
-cargo clippy -- -D warnings    # Fail on lint warnings
+cargo test --all-features      # Fail on test failures
+cargo clippy --all-features -- -D warnings    # Fail on lint warnings
+cargo +1.88 check --all-features && cargo +1.88 test --all-features
 cargo audit                    # Fail on known vulnerabilities
 ```

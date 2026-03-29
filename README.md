@@ -169,6 +169,8 @@ sjvm ui
 ### Building
 
 ```bash
+# Local default toolchain comes from rust-toolchain.toml (stable)
+
 # Build the project
 cargo build
 
@@ -202,17 +204,17 @@ cargo build --no-default-features
 # Run unit tests
 cargo test
 
+# Main local validation path
+cargo fmt --check
+cargo check --all-features
+cargo test --all-features
+cargo clippy --all-features -- -D warnings
+
 # Run specific test
 cargo test test_name
 
-# Run all tests including integration tests
-cargo test -- --ignored
-
-# Run clippy lints
-cargo clippy
-
-# Format code
-cargo fmt
+# Run minimal feature set explicitly
+cargo test --no-default-features
 ```
 
 ### End-to-End Testing with Docker
@@ -275,7 +277,7 @@ Example configuration:
 
 ## Requirements
 
-- Rust 1.86+ (Edition 2024)
+- Rust 1.88+ (Edition 2024; local default toolchain is stable via `rust-toolchain.toml`)
 - Permission to create symlinks in JDK directories
 - Windows: Developer Mode enabled for symlink creation
 - Docker (for e2e testing)

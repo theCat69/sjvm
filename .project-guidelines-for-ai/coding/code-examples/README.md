@@ -28,7 +28,7 @@ Given the detected tech stack, the following example files are recommended:
 
 ## Languages & Frameworks
 
-- **Rust** (2024 edition, MSRV 1.86)
+- **Rust** (2024 edition, MSRV 1.88; local default toolchain is stable)
 - **clap** 4.5 — derive API (`Parser`, `Subcommand`, `Args`)
 - **anyhow** 1.0 — error propagation with context
 - **serde** / **serde_json** — JSON config serialization

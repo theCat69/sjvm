@@ -6,11 +6,11 @@ Build instructions and conventions for **sjvm** — a Rust 2024 edition CLI bina
 
 ## Prerequisites
 
-- **Rust**: minimum version 1.86 (edition 2024). Install via [rustup](https://rustup.rs/).
+- **Rust**: minimum version 1.88 (edition 2024). Local development defaults to the stable toolchain via `rust-toolchain.toml`. Install via [rustup](https://rustup.rs/).
   ```bash
   rustup install stable
   rustup update
-  rustc --version   # must be >= 1.86
+  rustc --version   # must be >= 1.88
   ```
 - **Cargo**: bundled with Rust; no separate installation needed.
 - **Docker** (E2E tests only): required for integration tests; not needed for standard builds or unit tests.
@@ -21,7 +21,7 @@ Build instructions and conventions for **sjvm** — a Rust 2024 edition CLI bina
 ## Environment Setup
 
 1. Clone the repository.
-2. Verify Rust version: `rustc --version` — must be ≥ 1.86.
+2. Verify Rust version: `rustc --version` — must be ≥ 1.88.
 3. No additional environment variables or system dependencies are required for a debug build.
 4. For E2E tests, Docker must be installed and running (see Testing Guidelines).
 
@@ -32,8 +32,8 @@ Build instructions and conventions for **sjvm** — a Rust 2024 edition CLI bina
 ### Preferred (MCP tools — use these in AI agent context)
 
 ```bash
-rust-mcp-server_cargo-check    # Fast type checking (no codegen)
-rust-mcp-server_cargo-clippy   # Linting — fix all warnings before committing
+rust-mcp-server_cargo-check    # Fast type checking (use --all-features when relevant)
+rust-mcp-server_cargo-clippy   # Linting — use all-features for the main quality gate
 rust-mcp-server_cargo-fmt      # Format all code
 rust-mcp-server_cargo-build    # Debug build
 ```
@@ -41,8 +41,8 @@ rust-mcp-server_cargo-build    # Debug build
 ### Standard Cargo Commands (alternative)
 
 ```bash
-cargo check                    # Fast type checking
-cargo clippy -- -D warnings    # Lint — fail on any warning
+cargo check --all-features     # Fast type checking for all feature-gated code
+cargo clippy --all-features -- -D warnings    # Lint — fail on any warning
 cargo fmt                      # Format code
 cargo fmt --check              # Verify formatting without changing files (CI)
 cargo build                    # Debug build → target/debug/sjvm
@@ -68,13 +68,13 @@ Default features are empty (`default = []`), so the base build has no TUI.
 Standard AI agent workflow — run these in order before every commit:
 
 ```bash
-rust-mcp-server_cargo-check && rust-mcp-server_cargo-test && rust-mcp-server_cargo-clippy
+rust-mcp-server_cargo-check --all-features && rust-mcp-server_cargo-test --all-features && rust-mcp-server_cargo-clippy --all-features -- -D warnings
 ```
 
 Or with standard Cargo:
 
 ```bash
-cargo fmt --check && cargo check && cargo test && cargo clippy -- -D warnings
+cargo fmt --check && cargo check --all-features && cargo test --all-features && cargo clippy --all-features -- -D warnings
 ```
 
 Run the binary after a debug build:
@@ -122,13 +122,13 @@ Do **not** add `Cargo.lock` to `.gitignore` (it is correct for library crates, b
 
 - All TUI code must be gated with `#[cfg(feature = "ui")]`.
 - The `ui` feature adds `ratatui 0.30.0` and `crossterm 0.29.0` as optional dependencies.
-- **Compatibility note**: ratatui 0.30.0 declares MSRV 1.86, which matches the project's MSRV 1.86.
+- **Compatibility note**: ratatui 0.30.0 is compatible with the project's MSRV 1.88.
 
 ---
 
 ## CI/CD Pipeline
 
-There is currently no GitHub Actions pipeline. When one is added, the recommended CI jobs are:
+GitHub Actions CI uses stable as the main quality gate and a separate MSRV 1.88 job for compatibility:
 
 ```yaml
 # Recommended CI steps (GitHub Actions example)
@@ -142,7 +142,10 @@ There is currently no GitHub Actions pipeline. When one is added, the recommende
   run: cargo clippy --all-features -- -D warnings
 
 - name: Unit tests
-  run: cargo test
+  run: cargo test --all-features
+
+- name: MSRV check + test
+  run: cargo +1.88 check --all-features && cargo +1.88 test --all-features
 
 - name: Security audit
   run: cargo audit

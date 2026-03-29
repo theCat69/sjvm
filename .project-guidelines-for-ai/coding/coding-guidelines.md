@@ -9,7 +9,7 @@ This document defines the coding conventions for **sjvm** — a Rust 2024 editio
 - **Indentation**: 4 spaces (rustfmt default). Never use tabs.
 - **Max line length**: 100 characters (rustfmt default).
 - **Formatting**: All code must pass `cargo fmt` / `rust-mcp-server_cargo-fmt` without changes. Format before committing.
-- **Linting**: All code must pass `cargo clippy -- -D warnings`. Fix clippy warnings; do not suppress them without justification.
+- **Linting**: All code must pass `cargo clippy --all-features -- -D warnings` as the main validation path. CI may also run a no-features pass; fix clippy warnings and do not suppress them without justification.
 - **Edition**: Rust 2024. Use edition-2024 idioms:
   - `if let` chains are expressions — use them where cleaner than nested `if let`.
   - `unsafe_op_in_unsafe_fn` lint is deny-by-default in 2024 — every `unsafe` call inside an `unsafe fn` still requires its own `unsafe` block.
@@ -198,7 +198,7 @@ enum Commands {
   ratatui::run(|terminal| { ... })
   ```
 - Implement `Widget for &Foo` (not `WidgetRef for Foo`) — this is the preferred pattern in ratatui 0.30.
-- Note: ratatui 0.30.0 has MSRV 1.86; project targets 1.86 — verify compatibility before upgrading ratatui.
+- Note: ratatui 0.30.0 supports the project's MSRV 1.88; verify compatibility before upgrading ratatui.
 
 ### Visibility
 
