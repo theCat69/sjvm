@@ -2,7 +2,9 @@ use std::path::{Path, PathBuf};
 
 use crate::config::config;
 
-/// Returns the path of the managed JDK symlink as configured.
+/// Returns the path of the managed JDK symlink as configured in `symlink_dir`.
+///
+/// This is the path that should be added to `PATH` and set as `JAVA_HOME`.
 pub(crate) fn symlink_path() -> PathBuf {
     PathBuf::from(&config().symlink_dir)
 }

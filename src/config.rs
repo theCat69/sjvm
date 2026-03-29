@@ -17,9 +17,15 @@ static CONFIG: OnceLock<Config> = OnceLock::new();
 #[cfg(unix)]
 const DANGEROUS_PREFIXES: &[&str] = &["/etc", "/bin", "/sbin", "/usr/bin", "/usr/sbin"];
 
+/// Runtime configuration loaded from `sjvm-conf.json` (or defaults if absent).
 #[derive(Serialize, Deserialize, PartialEq, Debug)]
 pub(crate) struct Config {
+    /// Absolute path to the managed symlink that points to the active JDK.
+    /// Defaults to `~/.java/current` on Unix or `C:\Java\current` on Windows.
     pub(crate) symlink_dir: String,
+    /// List of directories to scan for JDK installations.
+    /// Defaults to `/usr/lib/jvm` on Linux, `/Library/Java/JavaVirtualMachines`
+    /// on macOS, or `C:\Program Files\Java` on Windows.
     pub(crate) jdks_dirs: Vec<String>,
 }
 
@@ -158,6 +164,9 @@ fn merge_config(config_value: Value) -> anyhow::Result<Config> {
 }
 
 /// Returns the path to the sjvm configuration file.
+///
+/// The file is located in the platform-specific configuration directory
+/// (e.g. `~/.config/sjvm/sjvm-conf.json` on Linux).
 pub(crate) fn config_path() -> PathBuf {
     Path::join(&app_dirs().config_dir, "sjvm-conf.json")
 }

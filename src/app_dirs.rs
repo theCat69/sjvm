@@ -6,8 +6,13 @@ use std::sync::OnceLock;
 
 static DIRS: OnceLock<AppDirs> = OnceLock::new();
 
+/// Platform-specific directories used by sjvm for data and configuration storage.
 pub(crate) struct AppDirs {
+    /// Directory for persistent data files (e.g. the binary JDK cache `sjvm-mem`).
+    /// Follows the XDG Base Directory spec on Linux (`~/.local/share/sjvm`).
     pub(crate) data_dir: PathBuf,
+    /// Directory for configuration files (e.g. `sjvm-conf.json`).
+    /// Follows the XDG Base Directory spec on Linux (`~/.config/sjvm`).
     pub(crate) config_dir: PathBuf,
 }
 

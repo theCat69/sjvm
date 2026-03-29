@@ -248,6 +248,14 @@ fn render_ui(f: &mut Frame, app: &mut App) {
 }
 
 /// Launches the interactive JDK selector TUI.
+///
+/// Renders a full-screen terminal UI that lets the user navigate the list of
+/// available JDKs with `j`/`k` (or arrow keys) and press `Enter` to switch.
+/// Press `q` or `Esc` to exit without making a change.
+///
+/// # Errors
+/// Returns an error if the terminal cannot be initialised, if reading the
+/// current symlink fails, or if the selected JDK cannot be activated.
 pub(crate) fn interactive_select() -> anyhow::Result<()> {
     run_ui()?;
     Ok(())

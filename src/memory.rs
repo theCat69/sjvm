@@ -13,9 +13,14 @@ use crate::{
 static MEMORY: OnceLock<Memory> = OnceLock::new();
 static MEMORY_FILE: OnceLock<PathBuf> = OnceLock::new();
 
+/// In-process cache of the JDK list and the currently active JDK.
+///
+/// Serialised to disk at `sjvm-mem` using [bincode] for fast startup.
 #[derive(Encode, Decode, PartialEq, Debug)]
 pub(crate) struct Memory {
+    /// Path to the JDK that is currently selected (the symlink target).
     pub(crate) current: PathBuf,
+    /// All JDK directories discovered in the configured `jdks_dirs`.
     pub(crate) jdks: Vec<PathBuf>,
 }
 
@@ -29,6 +34,9 @@ pub(crate) fn memory() -> &'static Memory {
 }
 
 /// Returns the path to the persistent memory cache file.
+///
+/// The file is located in the platform-specific data directory
+/// (e.g. `~/.local/share/sjvm/sjvm-mem` on Linux).
 pub(crate) fn memory_file() -> &'static PathBuf {
     MEMORY_FILE.get_or_init(|| Path::join(&app_dirs().data_dir, "sjvm-mem"))
 }
