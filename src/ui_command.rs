@@ -1,24 +1,18 @@
 use anyhow::Context;
-use crossterm::{
-    event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode, KeyEventKind},
-    execute,
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
-};
+use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
-    Frame, Terminal,
-    backend::CrosstermBackend,
+    Frame,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::Line,
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
-use std::io;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use crate::jdk_switcher::{get_jdk_display_name, switch_to_jdk};
+use crate::jdk_switcher::{jdk_display_name, switch_to_jdk};
 use crate::memory::memory;
-use crate::symlinks::get_symlink_path;
+use crate::symlinks::symlink_path;
 
 struct App {
     items: Vec<JdkItem>,
@@ -37,12 +31,14 @@ struct JdkItem {
 }
 
 impl App {
-    fn new() -> Result<Self, anyhow::Error> {
+    fn new() -> anyhow::Result<Self> {
         let jdks = &memory().jdks;
-        let current_link = get_symlink_path();
+        let current_link = symlink_path();
+        // If the symlink cannot be read, fall back to an empty path so the TUI
+        // still renders — the current indicator simply won't be shown.
         let current = std::fs::read_link(&current_link)
-            .with_context(|| "Cannot read current link")
-            .unwrap_or_default();
+            .with_context(|| format!("Cannot read symlink '{}'", current_link.display()))
+            .unwrap_or_else(|_| PathBuf::new());
 
         let mut items = Vec::new();
         let mut selected_index = None;
@@ -50,7 +46,7 @@ impl App {
 
         for (index, jdk) in jdks.iter().enumerate() {
             let is_current = jdk == &current;
-            let display_name = get_jdk_display_name(jdk);
+            let display_name = jdk_display_name(jdk);
 
             if is_current {
                 selected_index = Some(index);
@@ -78,6 +74,9 @@ impl App {
     }
 
     fn next(&mut self) {
+        if self.items.is_empty() {
+            return;
+        }
         let i = match self.list_state.selected() {
             Some(i) => {
                 if i >= self.items.len() - 1 {
@@ -93,6 +92,9 @@ impl App {
     }
 
     fn previous(&mut self) {
+        if self.items.is_empty() {
+            return;
+        }
         let i = match self.list_state.selected() {
             Some(i) => {
                 if i == 0 {
@@ -107,12 +109,12 @@ impl App {
         self.selected_index = Some(i);
     }
 
-    fn get_selected_jdk(&self) -> Option<&JdkItem> {
+    fn selected_jdk(&self) -> Option<&JdkItem> {
         self.selected_index.and_then(|i| self.items.get(i))
     }
 
-    fn switch_to_selected(&mut self) -> Result<bool, anyhow::Error> {
-        if let Some(jdk_item) = self.get_selected_jdk() {
+    fn switch_to_selected(&mut self) -> anyhow::Result<bool> {
+        if let Some(jdk_item) = self.selected_jdk() {
             let jdk_path = jdk_item.path.clone();
             let display_name = jdk_item.display_name.clone();
             switch_to_jdk(&jdk_path)?;
@@ -142,20 +144,23 @@ impl App {
     }
 }
 
-fn run_ui() -> Result<(), anyhow::Error> {
-    enable_raw_mode()?;
-    let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
-    let backend = CrosstermBackend::new(stdout);
-    let mut terminal = Terminal::new(backend)?;
+/// Runs the interactive TUI using ratatui's built-in init/restore pattern,
+/// which installs a panic hook to ensure the terminal is always cleaned up.
+fn run_ui() -> anyhow::Result<()> {
+    let mut terminal = ratatui::init();
+    let result = run_app_loop(&mut terminal);
+    ratatui::restore();
+    result
+}
 
+fn run_app_loop(terminal: &mut ratatui::DefaultTerminal) -> anyhow::Result<()> {
     let mut app = App::new()?;
 
     loop {
         // Clear expired success message
         app.clear_expired_success();
 
-        terminal.draw(|f| ui(f, &app))?;
+        terminal.draw(|f| render_ui(f, &app))?;
 
         if event::poll(Duration::from_millis(100))?
             && let Event::Key(key) = event::read()?
@@ -176,18 +181,10 @@ fn run_ui() -> Result<(), anyhow::Error> {
         }
     }
 
-    disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
-    terminal.show_cursor()?;
-
     Ok(())
 }
 
-fn ui(f: &mut Frame, app: &App) {
+fn render_ui(f: &mut Frame, app: &App) {
     // Fixed layout with permanent status bar at top
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -250,7 +247,8 @@ fn ui(f: &mut Frame, app: &App) {
     f.render_widget(help, chunks[2]);
 }
 
-pub fn interactive_select() {
+/// Launches the interactive JDK selector TUI.
+pub(crate) fn interactive_select() {
     if let Err(e) = run_ui() {
         eprintln!("❌ Error running interactive UI: {}", e);
         std::process::exit(1);
@@ -260,6 +258,7 @@ pub fn interactive_select() {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
     fn create_test_app() -> App {
@@ -299,17 +298,17 @@ mod tests {
 
         // Test initial selection
         assert_eq!(app.selected_index, Some(0));
-        assert_eq!(app.get_selected_jdk().unwrap().display_name, "jdk-11");
+        assert_eq!(app.selected_jdk().unwrap().display_name, "jdk-11");
 
         // Test next navigation
         app.next();
         assert_eq!(app.selected_index, Some(1));
-        assert_eq!(app.get_selected_jdk().unwrap().display_name, "jdk-17");
+        assert_eq!(app.selected_jdk().unwrap().display_name, "jdk-17");
 
         // Test previous navigation
         app.previous();
         assert_eq!(app.selected_index, Some(0));
-        assert_eq!(app.get_selected_jdk().unwrap().display_name, "jdk-11");
+        assert_eq!(app.selected_jdk().unwrap().display_name, "jdk-11");
 
         // Test wrap around on next
         app.next(); // to index 1
@@ -325,7 +324,7 @@ mod tests {
         // Test wrap around on previous from first item
         app.previous();
         assert_eq!(app.selected_index, Some(2)); // Should wrap to last item
-        assert_eq!(app.get_selected_jdk().unwrap().display_name, "jdk-21");
+        assert_eq!(app.selected_jdk().unwrap().display_name, "jdk-21");
     }
 
     #[test]
@@ -335,7 +334,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
 
         // This should not panic and should render UI successfully
-        let result = terminal.draw(|f| ui(f, &app));
+        let result = terminal.draw(|f| render_ui(f, &app));
         assert!(result.is_ok(), "UI rendering should not fail");
     }
 
@@ -345,7 +344,7 @@ mod tests {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        terminal.draw(|f| ui(f, &app)).unwrap();
+        terminal.draw(|f| render_ui(f, &app)).unwrap();
 
         // Check that help section is rendered by looking at buffer
         let buffer = terminal.backend().buffer();
@@ -372,7 +371,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
 
         // Just verify that rendering doesn't crash
-        let result = terminal.draw(|f| ui(f, &app));
+        let result = terminal.draw(|f| render_ui(f, &app));
         assert!(result.is_ok(), "List item rendering should not fail");
     }
 
@@ -382,7 +381,7 @@ mod tests {
         let backend = TestBackend::new(40, 10);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        terminal.draw(|f| ui(f, &app)).unwrap();
+        terminal.draw(|f| render_ui(f, &app)).unwrap();
 
         let buffer = terminal.backend().buffer();
         let content = buffer.content();
@@ -398,21 +397,38 @@ mod tests {
     }
 
     #[test]
+    fn test_navigation_on_empty_list() {
+        let mut app = App {
+            items: vec![],
+            list_state: ListState::default(),
+            selected_index: None,
+            current_jdk: None,
+            success_message: None,
+            success_shown_at: None,
+        };
+        // Neither next() nor previous() should panic on an empty list
+        app.next();
+        assert_eq!(app.selected_index, None);
+        app.previous();
+        assert_eq!(app.selected_index, None);
+    }
+
+    #[test]
     fn test_app_selection_logic() {
         let mut app = create_test_app();
 
         // Test getting selected JDK
-        let selected = app.get_selected_jdk();
+        let selected = app.selected_jdk();
         assert!(selected.is_some());
         assert_eq!(selected.unwrap().display_name, "jdk-11");
 
         // Test selection after navigation
         app.next();
-        let selected = app.get_selected_jdk();
+        let selected = app.selected_jdk();
         assert_eq!(selected.unwrap().display_name, "jdk-17");
 
         app.next();
-        let selected = app.get_selected_jdk();
+        let selected = app.selected_jdk();
         assert_eq!(selected.unwrap().display_name, "jdk-21");
     }
 }

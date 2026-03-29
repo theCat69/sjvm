@@ -6,11 +6,11 @@ Build instructions and conventions for **sjvm** — a Rust 2024 edition CLI bina
 
 ## Prerequisites
 
-- **Rust**: minimum version 1.85 (edition 2024). Install via [rustup](https://rustup.rs/).
+- **Rust**: minimum version 1.86 (edition 2024). Install via [rustup](https://rustup.rs/).
   ```bash
   rustup install stable
   rustup update
-  rustc --version   # must be >= 1.85
+  rustc --version   # must be >= 1.86
   ```
 - **Cargo**: bundled with Rust; no separate installation needed.
 - **Docker** (E2E tests only): required for integration tests; not needed for standard builds or unit tests.
@@ -21,7 +21,7 @@ Build instructions and conventions for **sjvm** — a Rust 2024 edition CLI bina
 ## Environment Setup
 
 1. Clone the repository.
-2. Verify Rust version: `rustc --version` — must be ≥ 1.85.
+2. Verify Rust version: `rustc --version` — must be ≥ 1.86.
 3. No additional environment variables or system dependencies are required for a debug build.
 4. For E2E tests, Docker must be installed and running (see Testing Guidelines).
 
@@ -122,7 +122,7 @@ Do **not** add `Cargo.lock` to `.gitignore` (it is correct for library crates, b
 
 - All TUI code must be gated with `#[cfg(feature = "ui")]`.
 - The `ui` feature adds `ratatui 0.30.0` and `crossterm 0.29.0` as optional dependencies.
-- **Compatibility note**: ratatui 0.30.0 declares MSRV 1.86, which is higher than the project's MSRV 1.85. If this becomes a conflict, either pin to ratatui 0.29.x or update the project MSRV to 1.86 in `Cargo.toml`.
+- **Compatibility note**: ratatui 0.30.0 declares MSRV 1.86, which matches the project's MSRV 1.86.
 
 ---
 

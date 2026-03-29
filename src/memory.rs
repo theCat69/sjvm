@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{Context, bail};
 use bincode::{Decode, Encode, config};
 use std::{
     fs,
@@ -6,29 +6,35 @@ use std::{
     sync::OnceLock,
 };
 
-use crate::{app_dirs::app_dirs, jdk_resolver::detect_jdks, symlinks::get_symlink_path};
+use crate::{app_dirs::app_dirs, jdk_resolver::detect_jdks, symlinks::symlink_path};
 
 static MEMORY: OnceLock<Memory> = OnceLock::new();
 static MEMORY_FILE: OnceLock<PathBuf> = OnceLock::new();
 
 #[derive(Encode, Decode, PartialEq, Debug)]
-pub struct Memory {
-    pub current: PathBuf,
-    pub jdks: Vec<PathBuf>,
+pub(crate) struct Memory {
+    pub(crate) current: PathBuf,
+    pub(crate) jdks: Vec<PathBuf>,
 }
 
-pub fn memory() -> &'static Memory {
-    MEMORY.get_or_init(|| lazy_init_memory().unwrap())
+/// Returns a reference to the in-memory JDK cache, initialising it on first call.
+///
+/// # Errors
+/// Panics at startup (via `.expect`) if the cache file cannot be read or
+/// written; this is intentional — the binary cannot function without it.
+pub(crate) fn memory() -> &'static Memory {
+    MEMORY.get_or_init(|| lazy_init_memory().expect("Failed to initialise JDK memory cache"))
 }
 
-pub fn memory_file() -> &'static PathBuf {
+/// Returns the path to the persistent memory cache file.
+pub(crate) fn memory_file() -> &'static PathBuf {
     MEMORY_FILE.get_or_init(|| Path::join(&app_dirs().data_dir, "sjvm-mem"))
 }
 
-fn lazy_init_memory() -> Result<Memory, anyhow::Error> {
-    let memory_file = memory_file();
-    if !memory_file.is_file() {
-        let current = get_current()?;
+fn lazy_init_memory() -> anyhow::Result<Memory> {
+    let mem_file = memory_file();
+    if !mem_file.is_file() {
+        let current = current_jdk()?;
         let jdks = detect_jdks();
         let memory = Memory {
             current: current.to_path_buf(),
@@ -37,35 +43,35 @@ fn lazy_init_memory() -> Result<Memory, anyhow::Error> {
         dump_binaries(&memory)?;
         Ok(memory)
     } else {
-        let memory = load_from_binaries()?;
-        Ok(memory)
+        load_from_binaries()
     }
 }
 
-fn dump_binaries(memory: &Memory) -> Result<(), anyhow::Error> {
+fn dump_binaries(memory: &Memory) -> anyhow::Result<()> {
     fs::write(
         memory_file(),
         bincode::encode_to_vec(memory, config::standard())
-            .with_context(|| "Cannot encode memory to binaries")?,
+            .context("Cannot encode memory to binaries")?,
     )
-    .with_context(|| "Cannot write to memory file")?;
+    .context("Cannot write to memory file")?;
     Ok(())
 }
 
-fn load_from_binaries() -> Result<Memory, anyhow::Error> {
-    let file = fs::read(memory_file()).with_context(|| "Cannot read memory file")?;
+fn load_from_binaries() -> anyhow::Result<Memory> {
+    let file = fs::read(memory_file()).context("Cannot read memory file")?;
     let (decoded, _): (Memory, usize) = bincode::decode_from_slice(&file, config::standard())
-        .with_context(|| "Cannot decode binaries from memory file")?;
+        .context("Cannot decode binaries from memory file")?;
     Ok(decoded)
 }
 
-fn get_current() -> Result<&'static PathBuf, anyhow::Error> {
-    let current_link = get_symlink_path();
-    let current = std::fs::read_link(&current_link).with_context(|| "Cannot read current link")?;
+fn current_jdk() -> anyhow::Result<&'static PathBuf> {
+    let current_link = symlink_path();
+    let current = std::fs::read_link(&current_link)
+        .with_context(|| format!("Cannot read symlink '{}'", current_link.display()))?;
     for jdk in detect_jdks() {
         if jdk == &current {
             return Ok(jdk);
         }
     }
-    panic!("No current jdks ! Did you run setup first ?")
+    bail!("No current JDK found. Did you run `sjvm setup` first?")
 }

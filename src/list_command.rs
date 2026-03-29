@@ -1,17 +1,22 @@
 use anyhow::Context;
 
 use crate::memory::memory;
-use crate::symlinks::get_symlink_path;
+use crate::symlinks::symlink_path;
 
-pub fn list_versions() {
-    let current_link = get_symlink_path();
+/// Lists all known JDKs, marking the currently active one with `→`.
+///
+/// # Errors
+/// Returns an error if the current symlink cannot be read.
+pub(crate) fn list_versions() -> anyhow::Result<()> {
+    let current_link = symlink_path();
     let current = std::fs::read_link(&current_link)
-        .with_context(|| "Cannot read current link")
-        .unwrap();
+        .with_context(|| format!("Cannot read current symlink '{}'", current_link.display()))?;
 
     for jdk in &memory().jdks {
         let is_current = jdk == &current;
         let marker = if is_current { "→" } else { " " };
         println!("{} {}", marker, jdk.display());
     }
+
+    Ok(())
 }

@@ -1,6 +1,6 @@
 # Coding Guidelines
 
-This document defines the coding conventions for **sjvm** — a Rust 2024 edition CLI for managing Java JDK installations via symlinks. All guidelines apply to Rust 2024 edition, MSRV 1.85.
+This document defines the coding conventions for **sjvm** — a Rust 2024 edition CLI for managing Java JDK installations via symlinks. All guidelines apply to Rust 2024 edition, MSRV 1.86.
 
 ---
 
@@ -198,7 +198,7 @@ enum Commands {
   ratatui::run(|terminal| { ... })
   ```
 - Implement `Widget for &Foo` (not `WidgetRef for Foo`) — this is the preferred pattern in ratatui 0.30.
-- Note: ratatui 0.30.0 has MSRV 1.86; project targets 1.85 — verify compatibility before upgrading ratatui or adjust MSRV accordingly.
+- Note: ratatui 0.30.0 has MSRV 1.86; project targets 1.86 — verify compatibility before upgrading ratatui.
 
 ### Visibility
 

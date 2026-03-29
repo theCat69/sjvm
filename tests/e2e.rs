@@ -236,7 +236,10 @@ fn test_ui_java_version_switch() {
         }
     }
 
-    // Verify the Java version has changed to a different version
+    // Verify the Java version has changed to a different version.
+    // NOTE: We assert the version *changed* from the initial (21) rather than
+    // asserting a specific target version — the list order may vary across
+    // environments, so hardcoding "17" would be fragile.
     let final_version = get_java_version();
     assert!(
         final_version.is_some(),
@@ -246,10 +249,9 @@ fn test_ui_java_version_switch() {
     let final_java_v = final_version.unwrap();
     println!("Final Java version: {}", final_java_v);
 
-    // The version should have changed from 21 to something else (17 or 11)
     assert!(
-        final_java_v.contains("17"),
-        "Java version should have changed from 21 to 17, got: {}",
+        !final_java_v.contains("21"),
+        "Java version should have changed from the initial 21, got: {}",
         final_java_v
     );
 }

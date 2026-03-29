@@ -1,3 +1,4 @@
+use anyhow::{Context, bail};
 use directories::ProjectDirs;
 use std::fs;
 use std::path::PathBuf;
@@ -5,35 +6,37 @@ use std::sync::OnceLock;
 
 static DIRS: OnceLock<AppDirs> = OnceLock::new();
 
-pub struct AppDirs {
-    pub data_dir: PathBuf,
-    pub config_dir: PathBuf,
+pub(crate) struct AppDirs {
+    pub(crate) data_dir: PathBuf,
+    pub(crate) config_dir: PathBuf,
 }
 
-pub fn app_dirs() -> &'static AppDirs {
-    DIRS.get_or_init(|| {
-        let proj_dirs = init_proj_dir();
-        AppDirs {
-            data_dir: lazy_init_dirs(Some(proj_dirs.data_dir())),
-            config_dir: lazy_init_dirs(Some(proj_dirs.config_dir())),
-        }
+/// Returns the application directories, initialising them on first call.
+///
+/// # Errors
+/// Panics at program startup (via `.expect`) if platform directories cannot be
+/// created; this is intentional — the binary cannot function without them.
+pub(crate) fn app_dirs() -> &'static AppDirs {
+    DIRS.get_or_init(|| init_app_dirs().expect("Failed to initialise application directories"))
+}
+
+fn init_app_dirs() -> anyhow::Result<AppDirs> {
+    let proj_dirs = init_proj_dir()?;
+    Ok(AppDirs {
+        data_dir: ensure_dir(proj_dirs.data_dir())?,
+        config_dir: ensure_dir(proj_dirs.config_dir())?,
     })
 }
 
-fn init_proj_dir() -> ProjectDirs {
-    match ProjectDirs::from("rs", "", "sjvm") {
-        Some(proj_dirs) => proj_dirs,
-        None => panic!("Error creating config dir"),
-    }
+fn init_proj_dir() -> anyhow::Result<ProjectDirs> {
+    ProjectDirs::from("rs", "", "sjvm").context("Failed to resolve platform project directories")
 }
 
-fn lazy_init_dirs(runtime_dir: Option<&std::path::Path>) -> PathBuf {
-    match runtime_dir {
-        Some(run_dir) => match fs::create_dir_all(run_dir) {
-            Ok(()) => run_dir.to_path_buf(),
-            Err(err) => panic!("Error creating config dir : {err}"),
-        },
-        //TODO what is fallback ?
-        None => panic!("I should be able to create dir"),
+fn ensure_dir(path: &std::path::Path) -> anyhow::Result<PathBuf> {
+    if path.as_os_str().is_empty() {
+        bail!("Application directory path is empty");
     }
+    fs::create_dir_all(path)
+        .with_context(|| format!("Failed to create directory '{}'", path.display()))?;
+    Ok(path.to_path_buf())
 }

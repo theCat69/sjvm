@@ -69,7 +69,7 @@ tests/e2e.rs          # Integration tests (Docker-only)
 
 ## Environment
 
-- **Rust Edition**: 2024 | **Min Version**: 1.85
+- **Rust Edition**: 2024 | **Min Version**: 1.86
 - **E2E Docker**: Ubuntu 22.04 with Java 11, 17, 21
 
 ## Quick Reference
