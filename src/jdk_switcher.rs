@@ -1,7 +1,8 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::Context;
+use anyhow::{Context, bail};
 
+use crate::config::config;
 use crate::memory::memory;
 use crate::symlinks::{create_symlink, symlink_path};
 
@@ -42,14 +43,44 @@ pub(crate) fn find_jdk_by_version_in_list(version: &str, jdks: &[PathBuf]) -> Jd
 
 /// Switches the active JDK by pointing the managed symlink to `jdk_path`.
 ///
+/// Before creating the symlink, the path is canonicalized to prevent TOCTOU
+/// races and to verify the target is still inside a configured `jdks_dirs`.
+///
 /// # Errors
-/// Returns an error if symlink creation fails.
+/// Returns an error if the path cannot be canonicalized, if the canonical
+/// path is outside all configured `jdks_dirs`, or if symlink creation fails.
 pub(crate) fn switch_to_jdk(jdk_path: &Path) -> anyhow::Result<()> {
+    // Canonicalize resolves symlinks and `..` components to get the real path.
+    let canonical = jdk_path.canonicalize().with_context(|| {
+        format!(
+            "Failed to canonicalize JDK path '{}'",
+            jdk_path.to_string_lossy()
+        )
+    })?;
+
+    // Verify the canonical path is still inside one of the configured jdks_dirs.
+    let cfg = config();
+    let in_configured_dir = cfg.jdks_dirs.iter().any(|dir| {
+        // Attempt to canonicalize the configured dir; fall back to the raw path
+        // if it does not exist yet (e.g. first-run before setup).
+        let canonical_dir = PathBuf::from(dir)
+            .canonicalize()
+            .unwrap_or_else(|_| PathBuf::from(dir));
+        canonical.starts_with(&canonical_dir)
+    });
+
+    if !in_configured_dir {
+        bail!(
+            "JDK path '{}' is outside configured jdks_dirs — refusing to create symlink",
+            canonical.display()
+        );
+    }
+
     let symlink = symlink_path();
-    create_symlink(jdk_path, &symlink).with_context(|| {
+    create_symlink(&canonical, &symlink).with_context(|| {
         format!(
             "Failed to switch to JDK at '{}'",
-            jdk_path.to_string_lossy()
+            canonical.to_string_lossy()
         )
     })?;
     Ok(())
@@ -61,7 +92,7 @@ pub(crate) fn jdk_display_name(jdk_path: &Path) -> String {
         .file_name()
         .unwrap_or_default()
         .to_string_lossy()
-        .to_string()
+        .into_owned()
 }
 
 #[cfg(test)]

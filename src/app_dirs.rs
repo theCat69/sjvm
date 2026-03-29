@@ -13,9 +13,9 @@ pub(crate) struct AppDirs {
 
 /// Returns the application directories, initialising them on first call.
 ///
-/// # Errors
-/// Panics at program startup (via `.expect`) if platform directories cannot be
-/// created; this is intentional — the binary cannot function without them.
+/// # Panics
+/// Panics at program startup if platform directories cannot be created; this
+/// is intentional — the binary cannot function without them.
 pub(crate) fn app_dirs() -> &'static AppDirs {
     DIRS.get_or_init(|| init_app_dirs().expect("Failed to initialise application directories"))
 }
@@ -38,5 +38,15 @@ fn ensure_dir(path: &std::path::Path) -> anyhow::Result<PathBuf> {
     }
     fs::create_dir_all(path)
         .with_context(|| format!("Failed to create directory '{}'", path.display()))?;
+
+    // Set owner-only permissions (0700) to prevent other users from reading
+    // sjvm's config and cache data.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
+            .with_context(|| format!("Failed to set permissions on '{}'", path.display()))?;
+    }
+
     Ok(path.to_path_buf())
 }

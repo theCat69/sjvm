@@ -6,7 +6,9 @@ use std::{
     sync::OnceLock,
 };
 
-use crate::{app_dirs::app_dirs, jdk_resolver::detect_jdks, symlinks::symlink_path};
+use crate::{
+    app_dirs::app_dirs, config::config, jdk_resolver::detect_jdks, symlinks::symlink_path,
+};
 
 static MEMORY: OnceLock<Memory> = OnceLock::new();
 static MEMORY_FILE: OnceLock<PathBuf> = OnceLock::new();
@@ -19,9 +21,9 @@ pub(crate) struct Memory {
 
 /// Returns a reference to the in-memory JDK cache, initialising it on first call.
 ///
-/// # Errors
-/// Panics at startup (via `.expect`) if the cache file cannot be read or
-/// written; this is intentional — the binary cannot function without it.
+/// # Panics
+/// Panics at startup if the cache file cannot be read or written; this is
+/// intentional — the binary cannot function without a valid cache.
 pub(crate) fn memory() -> &'static Memory {
     MEMORY.get_or_init(|| lazy_init_memory().expect("Failed to initialise JDK memory cache"))
 }
@@ -57,11 +59,50 @@ fn dump_binaries(memory: &Memory) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn validate_cached_memory(memory: Memory) -> anyhow::Result<Memory> {
+    let cfg = config();
+    let jdks_dirs: Vec<PathBuf> = cfg.jdks_dirs.iter().map(PathBuf::from).collect();
+
+    // Filter out stale entries (directory was removed) and warn.
+    let valid_jdks: Vec<PathBuf> = memory
+        .jdks
+        .into_iter()
+        .filter(|jdk| {
+            if !jdk.is_dir() {
+                eprintln!("sjvm: cached JDK no longer exists: {}", jdk.display());
+                return false;
+            }
+            // Validate the cached path is still inside a configured jdks_dir.
+            let in_configured_dir = jdks_dirs.iter().any(|d| jdk.starts_with(d));
+            if !in_configured_dir {
+                eprintln!(
+                    "sjvm: cached JDK '{}' is outside all configured jdks_dirs — removing from cache",
+                    jdk.display()
+                );
+            }
+            in_configured_dir
+        })
+        .collect();
+
+    // Validate that the cached current JDK is a real directory.
+    if !memory.current.as_os_str().is_empty() && !memory.current.is_dir() {
+        bail!(
+            "Cached current JDK '{}' no longer exists. Run 'sjvm setup' to rebuild the cache.",
+            memory.current.display()
+        );
+    }
+
+    Ok(Memory {
+        current: memory.current,
+        jdks: valid_jdks,
+    })
+}
+
 fn load_from_binaries() -> anyhow::Result<Memory> {
     let file = fs::read(memory_file()).context("Cannot read memory file")?;
     let (decoded, _): (Memory, usize) = bincode::decode_from_slice(&file, config::standard())
         .context("Cannot decode binaries from memory file")?;
-    Ok(decoded)
+    validate_cached_memory(decoded)
 }
 
 fn current_jdk() -> anyhow::Result<&'static PathBuf> {
