@@ -1,6 +1,6 @@
 use anyhow::bail;
 
-use crate::jdk_switcher::{find_jdk_by_version, jdk_display_name, switch_to_jdk, JdkLookupResult};
+use crate::jdk_switcher::{JdkLookupResult, find_jdk_by_version, jdk_display_name, switch_to_jdk};
 
 /// Switches the globally active JDK to the version matching `version`.
 pub(crate) fn use_version(version: &str) -> anyhow::Result<()> {
@@ -54,7 +54,7 @@ fn print_local_env_commands(jdk_path: &str, _display_name: &str) {
 mod tests {
     use std::path::PathBuf;
 
-    use crate::jdk_switcher::{find_jdk_by_version_in_list, JdkLookupResult};
+    use crate::jdk_switcher::{JdkLookupResult, find_jdk_by_version_in_list};
 
     fn test_jdks() -> Vec<PathBuf> {
         vec![

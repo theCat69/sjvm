@@ -59,6 +59,7 @@ src/
 ├── main.rs           # CLI entry (clap Parser/Subcommand)
 ├── config.rs         # JSON config with OnceLock singleton
 ├── jdk_resolver.rs   # JDK discovery
+├── jdk_switcher.rs   # JDK version lookup and symlink switching
 ├── symlinks.rs       # Cross-platform symlink ops
 ├── memory.rs         # Binary cache (bincode)
 ├── app_dirs.rs       # Platform directories

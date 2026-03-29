@@ -28,13 +28,12 @@ Given the detected tech stack, the following example files are recommended:
 
 ## Languages & Frameworks
 
-- **Rust** (2024 edition, MSRV 1.85)
+- **Rust** (2024 edition, MSRV 1.86)
 - **clap** 4.5 — derive API (`Parser`, `Subcommand`, `Args`)
 - **anyhow** 1.0 — error propagation with context
 - **serde** / **serde_json** — JSON config serialization
 - **bincode** 2.0 — binary cache serialization
 - **directories** 6 — cross-platform path resolution
-- **walkdir** 2.5 — directory traversal
 - **ratatui** 0.30 + **crossterm** 0.29 — optional TUI (feature `ui`)
 
 ## Adding New Examples

@@ -4,7 +4,7 @@ use std::{
     sync::OnceLock,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use directories::UserDirs;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

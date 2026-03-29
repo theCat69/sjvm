@@ -27,7 +27,7 @@ C:\Java
 
 ### Linux
 
-On Linux, if you install JDKs via a package manager and your user cannot create symlinks in those locations, you’ll need to copy the JDKs to a folder you own.
+On Linux, if you install JDKs via a package manager and your user cannot create symlinks in those locations, you'll need to copy the JDKs to a folder you own.
 
 Default JDK folder:
 
@@ -43,6 +43,14 @@ Default JDK folder:
 
 ```sh
 /Library/Java/JavaVirtualMachines
+```
+
+## Installation
+
+```bash
+cargo install --path .
+# With TUI support:
+cargo install --path . --features ui
 ```
 
 ## Configuration
@@ -74,7 +82,7 @@ sjvm config path
 
 ## Setup
 
-To load all your JDKs into memory and create the symlink folder, run:
+Performs first-run setup: discovers installed JDKs, points the managed symlink to the first JDK found, and builds the binary cache. Run this once after installing sjvm, and again whenever you add or remove a JDK.
 
 ```sh
 sjvm setup
@@ -93,10 +101,12 @@ sjvm list
 Example output:
 
 ```
-C:\dev\compilers\Java\jdk-17.0.1  
-C:\dev\compilers\Java\jdk-20.0.1  
-C:\dev\compilers\Java\jdk-21.0.1
+  C:\dev\compilers\Java\jdk-17.0.1
+→ C:\dev\compilers\Java\jdk-20.0.1
+  C:\dev\compilers\Java\jdk-21.0.1
 ```
+
+> The `→` marker indicates the currently active JDK (the one the managed symlink currently points to).
 
 ### Use
 
@@ -117,11 +127,13 @@ It will use the first match, so name your folders accordingly.
 
 ### Local Mode
 
-Set Java version for the current project only (creates `.java-version` file):
+Set Java version for the current shell session only. The `--local` flag prints `export JAVA_HOME=...` and `export PATH=...` to stdout — it does **not** create any file. You must `eval` the output to apply it to your current shell session:
 
 ```sh
-sjvm use jdk-21 --local
+eval $(sjvm use jdk-17 --local)
 ```
+
+> **Note:** Use `eval $(sjvm use <version> --local)` to apply the environment variables to your current shell session. Without `eval`, the variables are printed but not set.
 
 > ⚠️ **Windows Note**: Local mode is not yet supported on Windows. The command will show the manual steps to set the JAVA_HOME for the current session.
 
@@ -132,6 +144,25 @@ Show configuration path:
 ```sh
 sjvm config path
 ```
+
+### UI (Interactive Mode)
+
+`sjvm` includes an optional interactive TUI for browsing and switching JDKs:
+
+```sh
+sjvm ui
+```
+
+> **Note:** The `ui` subcommand requires building with `--features ui` (see Feature Flags below).
+
+**Keybindings:**
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Move selection up |
+| `↓` / `j` | Move selection down |
+| `Enter` | Switch to the selected JDK |
+| `q` / `Esc` | Quit without switching |
 
 ## Development
 
@@ -146,6 +177,23 @@ cargo build --release
 
 # Run the CLI
 ./target/release/sjvm --help
+```
+
+### Feature Flags
+
+| Feature | Enables | Default |
+|---------|---------|---------|
+| `ui` | ratatui + crossterm (interactive TUI) | ❌ off |
+
+```bash
+# Build with TUI support
+cargo build --features ui
+
+# Release build with TUI
+cargo build --release --features ui
+
+# Minimal build (no TUI)
+cargo build --no-default-features
 ```
 
 ### Testing
@@ -197,20 +245,21 @@ The Docker setup includes:
 
 ### Core Components
 
-- **CLI Interface** (`main.rs`) - Command-line parsing and routing using clap
-- **Configuration** (`config.rs`) - JSON-based configuration management with cross-platform directories
-- **JDK Resolution** (`jdk_resolver.rs`) - Automatic JDK discovery and version detection
-- **Symlink Management** (`symlinks.rs`) - Cross-platform symlink operations
-- **Memory Management** (`memory.rs`) - In-memory JDK caching and management
-- **Commands** - Individual CLI command implementations (`setup_command.rs`, `use_command.rs`, `list_command.rs`)
+- **CLI Interface** (`main.rs`) — Command-line parsing and routing using clap
+- **Configuration** (`config.rs`) — JSON-based configuration management with cross-platform directories
+- **JDK Resolution** (`jdk_resolver.rs`) — Automatic JDK discovery and version detection
+- **JDK Switching** (`jdk_switcher.rs`) — Version matching and symlink switch operations
+- **Symlink Management** (`symlinks.rs`) — Cross-platform symlink operations
+- **Memory Management** (`memory.rs`) — Binary cache (bincode) storing current JDK state
+- **Commands** — Individual CLI command implementations (`setup_command.rs`, `use_command.rs`, `list_command.rs`)
 
 ### Configuration
 
 Configuration is stored in platform-specific directories using the `directories` crate:
 
-- **Linux**: `~/.config/sjvm/config.json`
-- **macOS**: `~/Library/Application Support/sjvm/config.json`
-- **Windows**: `%APPDATA%\sjvm\config.json`
+- **Linux**: `~/.config/sjvm/sjvm-conf.json`
+- **macOS**: `~/Library/Application Support/sjvm/sjvm-conf.json`
+- **Windows**: `%APPDATA%\sjvm\sjvm-conf.json`
 
 Example configuration:
 ```json
@@ -226,11 +275,11 @@ Example configuration:
 
 ## Requirements
 
-- Rust 1.85+ (Edition 2024)
+- Rust 1.86+ (Edition 2024)
 - Permission to create symlinks in JDK directories
 - Windows: Developer Mode enabled for symlink creation
 - Docker (for e2e testing)
 
 ## License
 
-This project is open source. Feel free to contribute or report issues!
+MIT — see [LICENSE](LICENSE) for details.

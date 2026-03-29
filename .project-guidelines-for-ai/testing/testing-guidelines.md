@@ -39,8 +39,8 @@ mod tests {
     #[test]
     fn test_find_jdk_by_version_returns_correct_entry() -> Result<()> {
         let jdks = vec![/* ... */];
-        let result = find_jdk_by_version_in_list("17", &jdks)?;
-        assert_eq!(result.version, "17");
+        let result = find_jdk_by_version_in_list("17", &jdks);
+        assert!(matches!(result, JdkLookupResult::Found(_)));
         Ok(())
     }
 }
