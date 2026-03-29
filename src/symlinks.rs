@@ -24,7 +24,8 @@ pub(crate) fn create_symlink(target: &Path, link: &Path) -> anyhow::Result<()> {
             Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
-                return Err(anyhow::anyhow!(e).context("failed to remove existing symlink"));
+                return Err(anyhow::anyhow!(e)
+                    .context("failed to remove existing path at symlink location"));
             }
         }
     }
@@ -34,7 +35,8 @@ pub(crate) fn create_symlink(target: &Path, link: &Path) -> anyhow::Result<()> {
             Ok(_) => {}
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
             Err(e) => {
-                return Err(anyhow::anyhow!(e).context("failed to remove existing symlink"));
+                return Err(anyhow::anyhow!(e)
+                    .context("failed to remove existing path at symlink location"));
             }
         }
     }

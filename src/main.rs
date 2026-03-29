@@ -60,18 +60,18 @@ enum ConfigCmd {
 
 fn validate_version(s: &str) -> Result<String, String> {
     if s.is_empty() {
-        return Err("version cannot be empty".to_string());
+        return Err("version cannot be empty".to_owned());
     }
     if s.len() > 64 {
-        return Err("version string too long (max 64 chars)".to_string());
+        return Err("version string too long (max 64 chars)".to_owned());
     }
     if !s.chars().all(|c| c.is_alphanumeric() || "-._".contains(c)) {
         return Err(
             "version contains illegal characters (only alphanumeric, '-', '.', '_' allowed)"
-                .to_string(),
+                .to_owned(),
         );
     }
-    Ok(s.to_string())
+    Ok(s.to_owned())
 }
 
 fn main() {

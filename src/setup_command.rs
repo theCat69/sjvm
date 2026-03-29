@@ -30,6 +30,10 @@ pub(crate) fn setup() -> anyhow::Result<()> {
     }
 
     // Reset the memory cache so it is rebuilt from the new symlink target.
+    // NOTE: memory() uses OnceLock — removing the cache file and calling
+    // memory() here causes a fresh rebuild only on first run per process.
+    // The static is NOT re-initialised on subsequent calls within the same
+    // process, so this call is for the side-effect of flushing the file cache.
     let mem_file = memory_file();
     if mem_file.is_file() {
         fs::remove_file(mem_file).context("Cannot remove memory file")?;
