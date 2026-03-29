@@ -134,7 +134,7 @@ fn main() {
     match cli.command {
         Commands::Setup => {
             if let Err(e) = setup() {
-                eprintln!("❌ Setup failed: {}", e);
+                eprintln!("❌ Setup failed: {e}");
                 std::process::exit(1);
             }
         }
@@ -145,20 +145,20 @@ fn main() {
                 use_version(&version)
             };
             if let Err(e) = result {
-                eprintln!("❌ {}", e);
+                eprintln!("❌ {e}");
                 std::process::exit(1);
             }
         }
         Commands::List => {
             if let Err(e) = list_versions() {
-                eprintln!("❌ List failed: {}", e);
+                eprintln!("❌ List failed: {e}");
                 std::process::exit(1);
             }
         }
         #[cfg(feature = "ui")]
         Commands::Ui => {
             if let Err(e) = interactive_select() {
-                eprintln!("❌ UI failed: {}", e);
+                eprintln!("❌ UI failed: {e}");
                 std::process::exit(1);
             }
         }

@@ -14,9 +14,7 @@ fn validate_shell_safe_path(path: &Path) -> anyhow::Result<()> {
         &['`', '$', '"', '\\', '!', '&', '|', '>', '<', ';', '(', ')'];
     if let Some(bad_char) = path_str.chars().find(|c| SHELL_METACHARACTERS.contains(c)) {
         bail!(
-            "JDK path '{}' contains the shell metacharacter '{}' which is unsafe for eval output",
-            path_str,
-            bad_char
+            "JDK path '{path_str}' contains the shell metacharacter '{bad_char}' which is unsafe for eval output"
         );
     }
     Ok(())
@@ -31,11 +29,12 @@ pub(crate) fn use_version(version: &str) -> anyhow::Result<()> {
     match find_jdk_by_version(version) {
         JdkLookupResult::Found(jdk_path) => {
             switch_to_jdk(&jdk_path)?;
-            println!("✅ Now using JDK: {}", jdk_path.to_string_lossy());
+            let jdk_path_display = jdk_path.to_string_lossy();
+            println!("✅ Now using JDK: {jdk_path_display}");
             Ok(())
         }
         JdkLookupResult::NotFound => {
-            bail!("JDK version '{}' not found.", version);
+            bail!("JDK version '{version}' not found.");
         }
     }
 }
@@ -54,7 +53,7 @@ pub(crate) fn use_version_local(version: &str) -> anyhow::Result<()> {
             Ok(())
         }
         JdkLookupResult::NotFound => {
-            bail!("JDK version '{}' not found.", version);
+            bail!("JDK version '{version}' not found.");
         }
     }
 }
@@ -75,13 +74,13 @@ fn print_local_env_commands(jdk_path: &Path, _display_name: &str) -> anyhow::Res
         println!("Using local version automatically is not supported on cmd.");
         println!("Please copy/paste those commands in your current prompt:");
         // Wrap in double-quotes to handle spaces in the path.
-        println!("set JAVA_HOME=\"{}\"", path_str);
-        println!("set PATH=\"{}\\bin\";%PATH%", path_str);
+        println!("set JAVA_HOME=\"{path_str}\"");
+        println!("set PATH=\"{path_str}\\bin\";%PATH%");
     } else {
         // Paths are double-quoted to prevent word-splitting / shell injection
         // when the caller eval's this output (e.g. `eval $(sjvm use --local 17)`).
-        println!("export JAVA_HOME=\"{}\"", path_str);
-        println!("export PATH=\"{}/bin\":$PATH", path_str);
+        println!("export JAVA_HOME=\"{path_str}\"");
+        println!("export PATH=\"{path_str}/bin\":$PATH");
     }
     Ok(())
 }
@@ -139,7 +138,8 @@ mod tests {
     fn test_use_version_output_format() {
         // Test that we can construct the expected output format
         let jdk_path = PathBuf::from("/usr/lib/jvm/temurin-17-jdk");
-        let output = format!("✅ Now using JDK: {}", jdk_path.to_string_lossy());
+        let jdk_path_display = jdk_path.to_string_lossy();
+        let output = format!("✅ Now using JDK: {jdk_path_display}");
         assert!(output.contains("✅"));
         assert!(output.contains("temurin-17"));
     }
@@ -147,7 +147,7 @@ mod tests {
     #[test]
     fn test_version_not_found_output_format() {
         let version = "99";
-        let output = format!("❌ JDK version '{}' not found.", version);
+        let output = format!("❌ JDK version '{version}' not found.");
         assert!(output.contains("❌"));
         assert!(output.contains("99"));
     }
@@ -162,8 +162,8 @@ mod tests {
 
         // Verify the expected output format (double-quoted paths).
         let path_str = jdk_path.to_str().unwrap();
-        let java_home = format!("export JAVA_HOME=\"{}\"", path_str);
-        let path_cmd = format!("export PATH=\"{}/bin\":$PATH", path_str);
+        let java_home = format!("export JAVA_HOME=\"{path_str}\"");
+        let path_cmd = format!("export PATH=\"{path_str}/bin\":$PATH");
 
         assert!(java_home.contains("export"));
         assert!(java_home.contains(path_str));
@@ -176,8 +176,8 @@ mod tests {
 
         // Verify Windows-style output uses double-quoted paths.
         let path_str = jdk_path.to_str().unwrap();
-        let java_home = format!("set JAVA_HOME=\"{}\"", path_str);
-        let path_cmd = format!("set PATH=\"{}\\bin\";%PATH%", path_str);
+        let java_home = format!("set JAVA_HOME=\"{path_str}\"");
+        let path_cmd = format!("set PATH=\"{path_str}\\bin\";%PATH%");
 
         assert!(java_home.contains("set"));
         assert!(java_home.contains(path_str));
