@@ -34,6 +34,24 @@ enum Commands {
     },
     /// List available JDKs
     List,
+    /// Download and install a JDK from Adoptium or GraalVM CE
+    Install {
+        /// JDK major version to install (8–25, e.g. "21")
+        #[arg(value_name = "VERSION", value_parser = commands::install::validate_install_version)]
+        version: String,
+        /// JDK distribution vendor
+        #[arg(long, value_enum, default_value_t = core::jdk_catalog::Vendor::OpenJdk)]
+        vendor: core::jdk_catalog::Vendor,
+        /// Target operating system (auto-detected if not specified)
+        #[arg(long, value_name = "OS")]
+        os: Option<String>,
+        /// Target CPU architecture (auto-detected if not specified)
+        #[arg(long, value_name = "ARCH")]
+        arch: Option<String>,
+        /// Overwrite an existing installation of the same JDK version
+        #[arg(long)]
+        force: bool,
+    },
     #[cfg(feature = "ui")]
     /// Interactive TUI for selecting a JDK
     Ui,
@@ -68,7 +86,9 @@ fn validate_version(s: &str) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::validate_version;
+    use clap::Parser as _;
+
+    use super::{Cli, Commands, validate_version};
 
     #[test]
     fn test_validate_version_rejects_empty() {
@@ -118,6 +138,57 @@ mod tests {
         let exactly_64 = "a".repeat(64);
         assert!(validate_version(&exactly_64).is_ok());
     }
+
+    #[test]
+    fn test_install_command_parses_default_vendor() {
+        let cli = Cli::try_parse_from(["sjvm", "install", "21"]).expect("should parse");
+        if let Commands::Install {
+            version,
+            vendor,
+            force,
+            ..
+        } = cli.command
+        {
+            assert_eq!(version, "21");
+            assert_eq!(vendor, crate::core::jdk_catalog::Vendor::OpenJdk);
+            assert!(!force);
+        } else {
+            panic!("expected Commands::Install");
+        }
+    }
+
+    #[test]
+    fn test_install_command_parses_graalvm_vendor() {
+        let cli = Cli::try_parse_from(["sjvm", "install", "17", "--vendor", "graalvm"])
+            .expect("should parse");
+        if let Commands::Install { vendor, .. } = cli.command {
+            assert_eq!(vendor, crate::core::jdk_catalog::Vendor::GraalVm);
+        } else {
+            panic!("expected Commands::Install");
+        }
+    }
+
+    #[test]
+    fn test_install_command_parses_force_flag() {
+        let cli = Cli::try_parse_from(["sjvm", "install", "21", "--force"]).expect("should parse");
+        if let Commands::Install { force, .. } = cli.command {
+            assert!(force);
+        } else {
+            panic!("expected Commands::Install");
+        }
+    }
+
+    #[test]
+    fn test_install_command_rejects_unknown_vendor() {
+        let result = Cli::try_parse_from(["sjvm", "install", "21", "--vendor", "zulu"]);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_install_command_rejects_version_out_of_range() {
+        let result = Cli::try_parse_from(["sjvm", "install", "7"]);
+        assert!(result.is_err(), "version 7 should be rejected");
+    }
 }
 
 fn main() {
@@ -144,6 +215,24 @@ fn main() {
         Commands::List => {
             if let Err(e) = list_versions() {
                 eprintln!("❌ List failed: {e}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Install {
+            version,
+            vendor,
+            os,
+            arch,
+            force,
+        } => {
+            if let Err(e) = commands::install::run_install(
+                &version,
+                &vendor,
+                os.as_deref(),
+                arch.as_deref(),
+                force,
+            ) {
+                eprintln!("❌ Install failed: {e}");
                 std::process::exit(1);
             }
         }

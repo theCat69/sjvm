@@ -1,5 +1,7 @@
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
+
 use anyhow::Context;
-use crossterm::event::{self, Event, KeyCode, KeyEventKind};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout},
@@ -7,31 +9,29 @@ use ratatui::{
     text::Line,
     widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
 };
-use std::path::PathBuf;
-use std::time::{Duration, Instant};
 
 use crate::core::jdk_switcher::{jdk_display_name, switch_to_jdk};
 use crate::infra::memory::memory;
 use crate::infra::symlinks::symlink_path;
 
-struct App {
-    items: Vec<JdkItem>,
-    list_state: ListState,
-    selected_index: Option<usize>,
-    current_jdk: Option<PathBuf>,
-    success_message: Option<String>,
-    success_shown_at: Option<Instant>,
+pub(crate) struct SwitchState {
+    pub(super) items: Vec<JdkItem>,
+    pub(super) list_state: ListState,
+    pub(super) selected_index: Option<usize>,
+    pub(super) current_jdk: Option<PathBuf>,
+    pub(super) success_message: Option<String>,
+    pub(super) success_shown_at: Option<Instant>,
 }
 
 #[derive(Clone)]
-struct JdkItem {
-    path: PathBuf,
-    display_name: String,
-    is_current: bool,
+pub(super) struct JdkItem {
+    pub(super) path: PathBuf,
+    pub(super) display_name: String,
+    pub(super) is_current: bool,
 }
 
-impl App {
-    fn new() -> anyhow::Result<Self> {
+impl SwitchState {
+    pub(crate) fn new() -> anyhow::Result<Self> {
         let jdks = &memory().jdks;
         let current_link = symlink_path();
         // If the symlink cannot be read, fall back to an empty path so the TUI
@@ -63,7 +63,7 @@ impl App {
         let mut list_state = ListState::default();
         list_state.select(selected_index);
 
-        Ok(App {
+        Ok(SwitchState {
             items,
             list_state,
             selected_index,
@@ -73,7 +73,7 @@ impl App {
         })
     }
 
-    fn next(&mut self) {
+    pub(crate) fn next(&mut self) {
         if self.items.is_empty() {
             return;
         }
@@ -91,7 +91,7 @@ impl App {
         self.selected_index = Some(i);
     }
 
-    fn previous(&mut self) {
+    pub(crate) fn previous(&mut self) {
         if self.items.is_empty() {
             return;
         }
@@ -113,7 +113,7 @@ impl App {
         self.selected_index.and_then(|i| self.items.get(i))
     }
 
-    fn switch_to_selected(&mut self) -> anyhow::Result<bool> {
+    pub(crate) fn switch_to_selected(&mut self) -> anyhow::Result<bool> {
         if let Some(jdk_item) = self.selected_jdk() {
             let jdk_path = jdk_item.path.clone();
             let display_name = jdk_item.display_name.clone();
@@ -134,7 +134,7 @@ impl App {
         Ok(false)
     }
 
-    fn clear_expired_success(&mut self) {
+    pub(crate) fn clear_expired_success(&mut self) {
         if let Some(shown_at) = self.success_shown_at
             && shown_at.elapsed() > Duration::from_secs(2)
         {
@@ -144,48 +144,12 @@ impl App {
     }
 }
 
-/// Runs the interactive TUI using ratatui's built-in init/restore pattern,
-/// which installs a panic hook to ensure the terminal is always cleaned up.
-fn run_ui() -> anyhow::Result<()> {
-    let mut terminal = ratatui::init();
-    let result = run_app_loop(&mut terminal);
-    ratatui::restore();
-    result
-}
-
-fn run_app_loop(terminal: &mut ratatui::DefaultTerminal) -> anyhow::Result<()> {
-    let mut app = App::new()?;
-
-    loop {
-        // Clear expired success message
-        app.clear_expired_success();
-
-        terminal.draw(|f| render_ui(f, &mut app))?;
-
-        if event::poll(Duration::from_millis(100))?
-            && let Event::Key(key) = event::read()?
-        {
-            if key.kind != KeyEventKind::Press {
-                continue;
-            }
-
-            match key.code {
-                KeyCode::Char('q') | KeyCode::Esc => break,
-                KeyCode::Up | KeyCode::Char('k') => app.previous(),
-                KeyCode::Down | KeyCode::Char('j') => app.next(),
-                KeyCode::Enter => {
-                    app.switch_to_selected()?;
-                }
-                _ => {}
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn render_ui(f: &mut Frame, app: &mut App) {
-    // Fixed layout with permanent status bar at top
+/// Renders the JDK switch screen (list + status header + help).
+pub(crate) fn render_switch_screen(
+    f: &mut Frame,
+    state: &mut SwitchState,
+    area: ratatui::layout::Rect,
+) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -193,10 +157,10 @@ fn render_ui(f: &mut Frame, app: &mut App) {
             Constraint::Min(3),    // List
             Constraint::Length(3), // Help
         ])
-        .split(f.area());
+        .split(area);
 
     // Render status bar (styled like Help section)
-    let status_content = if let Some(ref message) = app.success_message {
+    let status_content = if let Some(ref message) = state.success_message {
         Line::from(vec![
             ratatui::text::Span::styled("✓ ", Style::default().fg(Color::Green)),
             ratatui::text::Span::raw(message),
@@ -212,7 +176,7 @@ fn render_ui(f: &mut Frame, app: &mut App) {
     );
     f.render_widget(status, chunks[0]);
 
-    let items: Vec<ListItem> = app
+    let items: Vec<ListItem> = state
         .items
         .iter()
         .map(|item| {
@@ -236,7 +200,7 @@ fn render_ui(f: &mut Frame, app: &mut App) {
         )
         .highlight_symbol(">> ");
 
-    f.render_stateful_widget(list, chunks[1], &mut app.list_state);
+    f.render_stateful_widget(list, chunks[1], &mut state.list_state);
 
     let help_text = vec![Line::from(
         "↑/k: Up   ↓/j: Down   Enter: Select   q/Esc: Quit",
@@ -247,32 +211,17 @@ fn render_ui(f: &mut Frame, app: &mut App) {
     f.render_widget(help, chunks[2]);
 }
 
-/// Launches the interactive JDK selector TUI.
-///
-/// Renders a full-screen terminal UI that lets the user navigate the list of
-/// available JDKs with `j`/`k` (or arrow keys) and press `Enter` to switch.
-/// Press `q` or `Esc` to exit without making a change.
-///
-/// # Errors
-/// Returns an error if the terminal cannot be initialised, if reading the
-/// current symlink fails, or if the selected JDK cannot be activated.
-pub(crate) fn interactive_select() -> anyhow::Result<()> {
-    run_ui()?;
-    Ok(())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
 
-    fn create_test_app() -> App {
-        // Create a mock app for testing
+    fn create_test_app() -> SwitchState {
         let mut list_state = ListState::default();
         list_state.select(Some(0));
 
-        App {
+        SwitchState {
             items: vec![
                 JdkItem {
                     path: PathBuf::from("/test/jdk-11"),
@@ -340,7 +289,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
 
         // This should not panic and should render UI successfully
-        let result = terminal.draw(|f| render_ui(f, &mut app));
+        let result = terminal.draw(|f| render_switch_screen(f, &mut app, f.area()));
         assert!(result.is_ok(), "UI rendering should not fail");
     }
 
@@ -350,7 +299,9 @@ mod tests {
         let backend = TestBackend::new(80, 24);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        terminal.draw(|f| render_ui(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| render_switch_screen(f, &mut app, f.area()))
+            .unwrap();
 
         // Check that help section is rendered by looking at buffer
         let buffer = terminal.backend().buffer();
@@ -377,7 +328,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
 
         // Just verify that rendering doesn't crash
-        let result = terminal.draw(|f| render_ui(f, &mut app));
+        let result = terminal.draw(|f| render_switch_screen(f, &mut app, f.area()));
         assert!(result.is_ok(), "List item rendering should not fail");
     }
 
@@ -387,7 +338,9 @@ mod tests {
         let backend = TestBackend::new(40, 10);
         let mut terminal = Terminal::new(backend).unwrap();
 
-        terminal.draw(|f| render_ui(f, &mut app)).unwrap();
+        terminal
+            .draw(|f| render_switch_screen(f, &mut app, f.area()))
+            .unwrap();
 
         let buffer = terminal.backend().buffer();
         let content = buffer.content();
@@ -404,7 +357,7 @@ mod tests {
 
     #[test]
     fn test_navigation_on_empty_list() {
-        let mut app = App {
+        let mut app = SwitchState {
             items: vec![],
             list_state: ListState::default(),
             selected_index: None,

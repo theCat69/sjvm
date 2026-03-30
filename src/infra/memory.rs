@@ -1,5 +1,5 @@
-use anyhow::{bail, Context};
-use bincode::{config, Decode, Encode};
+use anyhow::{Context, bail};
+use bincode::{Decode, Encode, config};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -114,6 +114,23 @@ fn load_from_binaries() -> anyhow::Result<Memory> {
     validate_cached_memory(decoded)
 }
 
+/// Removes the on-disk JDK memory cache so that the next invocation rebuilds it.
+///
+/// The in-process [`OnceLock`] is intentionally left populated — callers that invoke
+/// this function (e.g. `install`) are done for this process lifetime.
+/// Errors are non-fatal: a warning is printed and execution continues.
+#[allow(dead_code)] // removed in Phase 2 when install command calls this
+pub(crate) fn invalidate_memory() {
+    let path = memory_file();
+    if path.is_file()
+        && let Err(reason) = std::fs::remove_file(path)
+    {
+        eprintln!(
+            "sjvm: WARNING — could not invalidate cache: {reason}. Run 'sjvm setup' to rebuild."
+        );
+    }
+}
+
 fn current_jdk() -> anyhow::Result<&'static PathBuf> {
     let current_link = symlink_path();
     let current = std::fs::read_link(&current_link)
@@ -194,5 +211,15 @@ mod tests {
             result.is_err(),
             "corrupted bytes should not decode successfully"
         );
+    }
+
+    /// `invalidate_memory` must not panic when the cache file does not exist.
+    #[test]
+    fn test_invalidate_memory_noop_when_file_absent() {
+        // The memory_file() path will not exist as a file during unit tests
+        // (no real sjvm data directory is set up). Calling invalidate_memory()
+        // must be a no-op — no panic, no error propagation.
+        super::invalidate_memory();
+        // If we reach here the function handled the absent file gracefully.
     }
 }

@@ -24,6 +24,12 @@ anyhow = "1.0"
 time = "0.3.47"  # security pin — forces patched version; see RUSTSEC-2026-0009 / CVE-2026-25727
 ratatui = { version = "0.30.0", optional = true }
 crossterm = { version = "0.29.0", optional = true }
+flate2    = { version = "1.0",  default-features = false, features = ["rust_backend"] }
+indicatif = { version = "0.17", default-features = false }
+reqwest   = { version = "0.12", default-features = false, features = ["blocking", "rustls-tls", "json"] }
+sha2      = { version = "0.10", default-features = false }
+tar       = { version = "=0.4.45", default-features = false }  # pinned: RUSTSEC-2026-0067 / RUSTSEC-2026-0068 — CVEs fixed in 0.4.45
+zip       = { version = "2",    default-features = false, features = ["deflate"] }
 
 [dev-dependencies]
 pty-process = "0.5"

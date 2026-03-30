@@ -1,9 +1,9 @@
 use std::path::Path;
 
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 
 use crate::core::jdk_switcher::{
-    find_jdk_by_version, jdk_display_name, switch_to_jdk, JdkLookupResult,
+    JdkLookupResult, find_jdk_by_version, jdk_display_name, switch_to_jdk,
 };
 
 /// Validates that a path does not contain shell metacharacters that would be
@@ -91,7 +91,7 @@ fn print_local_env_commands(jdk_path: &Path, _display_name: &str) -> anyhow::Res
 mod tests {
     use std::path::PathBuf;
 
-    use crate::core::jdk_switcher::{find_jdk_by_version_in_list, JdkLookupResult};
+    use crate::core::jdk_switcher::{JdkLookupResult, find_jdk_by_version_in_list};
 
     use super::*;
 

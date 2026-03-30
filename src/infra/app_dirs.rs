@@ -1,4 +1,4 @@
-use anyhow::{bail, Context};
+use anyhow::{Context, bail};
 use directories::ProjectDirs;
 use std::fs;
 use std::path::PathBuf;
