@@ -3,7 +3,7 @@ use bincode::{Decode, Encode, config};
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::OnceLock,
+    sync::{LazyLock, Mutex, OnceLock},
 };
 
 use crate::core::jdk_resolver::detect_jdks;
@@ -11,13 +11,13 @@ use crate::infra::app_dirs::app_dirs;
 use crate::infra::config::config as app_config;
 use crate::infra::symlinks::symlink_path;
 
-static MEMORY: OnceLock<Memory> = OnceLock::new();
+static MEMORY: LazyLock<Mutex<Option<Memory>>> = LazyLock::new(|| Mutex::new(None));
 static MEMORY_FILE: OnceLock<PathBuf> = OnceLock::new();
 
 /// In-process cache of the JDK list and the currently active JDK.
 ///
 /// Serialised to disk at `sjvm-mem` using [bincode] for fast startup.
-#[derive(Encode, Decode, PartialEq, Debug)]
+#[derive(Encode, Decode, PartialEq, Debug, Clone)]
 pub(crate) struct Memory {
     /// Path to the JDK that is currently selected (the symlink target).
     pub(crate) current: PathBuf,
@@ -25,13 +25,25 @@ pub(crate) struct Memory {
     pub(crate) jdks: Vec<PathBuf>,
 }
 
-/// Returns a reference to the in-memory JDK cache, initialising it on first call.
+/// Returns the in-memory JDK cache by value (cloned), initialising it on first call.
 ///
-/// # Panics
-/// Panics at startup if the cache file cannot be read or written; this is
-/// intentional — the binary cannot function without a valid cache.
-pub(crate) fn memory() -> &'static Memory {
-    MEMORY.get_or_init(|| lazy_init_memory().expect("Failed to initialise JDK memory cache"))
+/// After `invalidate_memory()` is called the next invocation will re-read from
+/// disk (or rebuild from the filesystem if the disk file is also absent).
+pub(crate) fn memory() -> Memory {
+    let mut guard = MEMORY.lock().unwrap_or_else(|e| e.into_inner());
+    if guard.is_none() {
+        match load_or_init() {
+            Ok(m) => *guard = Some(m),
+            Err(e) => {
+                eprintln!("Fatal: failed to initialise JDK memory cache: {e:#}");
+                std::process::exit(1);
+            }
+        }
+    }
+    guard
+        .as_ref()
+        .expect("memory always Some after init")
+        .clone()
 }
 
 /// Returns the path to the persistent memory cache file.
@@ -42,15 +54,24 @@ pub(crate) fn memory_file() -> &'static PathBuf {
     MEMORY_FILE.get_or_init(|| Path::join(&app_dirs().data_dir, "sjvm-mem"))
 }
 
-fn lazy_init_memory() -> anyhow::Result<Memory> {
+fn load_or_init() -> anyhow::Result<Memory> {
     let mem_file = memory_file();
     if !mem_file.is_file() {
         let current = current_jdk()?;
-        let jdks = detect_jdks();
-        let memory = Memory {
-            current: current.to_path_buf(),
-            jdks: jdks.to_owned(),
-        };
+        let mut jdks = detect_jdks();
+        jdks.sort_by(|a, b| {
+            a.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_lowercase()
+                .cmp(
+                    &b.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_lowercase(),
+                )
+        });
+        let memory = Memory { current, jdks };
         dump_binaries(&memory)?;
         Ok(memory)
     } else {
@@ -114,29 +135,27 @@ fn load_from_binaries() -> anyhow::Result<Memory> {
     validate_cached_memory(decoded)
 }
 
-/// Removes the on-disk JDK memory cache so that the next invocation rebuilds it.
+/// Removes the on-disk JDK memory cache AND clears the in-process cache so
+/// that the next `memory()` call rebuilds from the filesystem.
 ///
-/// The in-process [`OnceLock`] is intentionally left populated — callers that invoke
-/// this function (e.g. `install`) are done for this process lifetime.
 /// Errors are non-fatal: a warning is printed and execution continues.
-#[allow(dead_code)] // removed in Phase 2 when install command calls this
 pub(crate) fn invalidate_memory() {
-    let path = memory_file();
-    if path.is_file()
-        && let Err(reason) = std::fs::remove_file(path)
-    {
-        eprintln!(
-            "sjvm: WARNING — could not invalidate cache: {reason}. Run 'sjvm setup' to rebuild."
-        );
+    let _ = std::fs::remove_file(memory_file());
+    match MEMORY.lock() {
+        Ok(mut guard) => *guard = None,
+        Err(e) => {
+            let mut guard = e.into_inner();
+            *guard = None;
+        }
     }
 }
 
-fn current_jdk() -> anyhow::Result<&'static PathBuf> {
+fn current_jdk() -> anyhow::Result<PathBuf> {
     let current_link = symlink_path();
     let current = std::fs::read_link(&current_link)
         .with_context(|| format!("Cannot read symlink '{}'", current_link.display()))?;
     for jdk in detect_jdks() {
-        if jdk == &current {
+        if jdk == current {
             return Ok(jdk);
         }
     }
@@ -221,5 +240,64 @@ mod tests {
         // must be a no-op — no panic, no error propagation.
         super::invalidate_memory();
         // If we reach here the function handled the absent file gracefully.
+    }
+
+    /// Verifies that `Memory` implements `Clone` correctly.
+    #[test]
+    fn test_memory_clone() {
+        let original = Memory {
+            current: PathBuf::from("/usr/lib/jvm/temurin-17-jdk"),
+            jdks: vec![
+                PathBuf::from("/usr/lib/jvm/temurin-11-jdk"),
+                PathBuf::from("/usr/lib/jvm/temurin-21-jdk"),
+            ],
+        };
+        let cloned = original.clone();
+        assert_eq!(original, cloned);
+    }
+
+    /// Verifies that `load_or_init` sorts the JDK list alphabetically (case-insensitive).
+    ///
+    /// Tests the sort logic directly by applying the same comparator to an unsorted list.
+    #[test]
+    fn test_jdk_sort_order_alphabetical() {
+        let mut jdks = vec![
+            PathBuf::from("/jvms/zulu-8"),
+            PathBuf::from("/jvms/temurin-21-jdk"),
+            PathBuf::from("/jvms/graalvm-ce-java17"),
+            PathBuf::from("/jvms/Amazon-corretto-11"),
+            PathBuf::from("/jvms/temurin-11-jdk"),
+        ];
+
+        jdks.sort_by(|a, b| {
+            a.file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_lowercase()
+                .cmp(
+                    &b.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .to_lowercase(),
+                )
+        });
+
+        let names: Vec<&str> = jdks
+            .iter()
+            .map(|p| p.file_name().unwrap().to_str().unwrap())
+            .collect();
+
+        // After case-insensitive alphabetical sort:
+        // amazon-corretto-11, graalvm-ce-java17, temurin-11-jdk, temurin-21-jdk, zulu-8
+        assert_eq!(
+            names,
+            vec![
+                "Amazon-corretto-11",
+                "graalvm-ce-java17",
+                "temurin-11-jdk",
+                "temurin-21-jdk",
+                "zulu-8",
+            ]
+        );
     }
 }

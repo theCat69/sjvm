@@ -84,15 +84,30 @@ pub(crate) fn format_bytes(bytes: u64) -> String {
 }
 
 // ---------------------------------------------------------------------------
+// Vendor label helper
+// ---------------------------------------------------------------------------
+
+fn vendor_label(vendor: &Vendor) -> &'static str {
+    match vendor {
+        Vendor::OpenJdk => "OpenJDK (Adoptium)",
+        Vendor::GraalVm => "GraalVM CE",
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Renderer
 // ---------------------------------------------------------------------------
 
 /// Renders the install screen into `area`, delegating to the appropriate sub-renderer
 /// based on the current `state`.
+///
+/// `install_vendor` is the vendor selected by the user (set after `VendorPicker`)
+/// and is used to display the vendor name in the block title.
 pub(crate) fn render_install_screen(
     f: &mut Frame,
     state: &mut InstallState,
     area: ratatui::layout::Rect,
+    install_vendor: Option<&Vendor>,
 ) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
@@ -104,10 +119,16 @@ pub(crate) fn render_install_screen(
         ])
         .split(area);
 
+    // Build the install block title: show vendor when one has been selected.
+    let block_title = match install_vendor {
+        Some(v) => format!(" Install JDK — {} ", vendor_label(v)),
+        None => " Install JDK ".to_owned(),
+    };
+
     match state {
         InstallState::VendorPicker { selected } => {
             let selected = *selected;
-            render_header(f, chunks[0], "Select Vendor");
+            render_header(f, chunks[0], "Select Vendor", &block_title);
             render_vendor_list(f, chunks[1], selected);
             render_empty_gauge(f, chunks[2]);
             render_help(
@@ -117,7 +138,7 @@ pub(crate) fn render_install_screen(
             );
         }
         InstallState::FetchingVersions { .. } => {
-            render_header(f, chunks[0], "Fetching Versions");
+            render_header(f, chunks[0], "Fetching Versions", &block_title);
             let content = Paragraph::new(Line::from("Fetching available versions..."))
                 .block(Block::default().borders(Borders::ALL).title("Status"));
             f.render_widget(content, chunks[1]);
@@ -128,7 +149,7 @@ pub(crate) fn render_install_screen(
             versions, selected, ..
         } => {
             let selected = *selected;
-            render_header(f, chunks[0], "Select Version");
+            render_header(f, chunks[0], "Select Version", &block_title);
             render_version_list(f, chunks[1], versions, selected);
             render_empty_gauge(f, chunks[2]);
             render_help(
@@ -139,7 +160,7 @@ pub(crate) fn render_install_screen(
         }
         InstallState::FetchingArtifact { version, .. } => {
             let version = *version;
-            render_header(f, chunks[0], "Resolving Artifact");
+            render_header(f, chunks[0], "Resolving Artifact", &block_title);
             let content = Paragraph::new(Line::from(format!("Resolving JDK {version}...")))
                 .block(Block::default().borders(Borders::ALL).title("Status"));
             f.render_widget(content, chunks[1]);
@@ -147,7 +168,7 @@ pub(crate) fn render_install_screen(
             render_help(f, chunks[3], "Please wait...   Ctrl+C: Back");
         }
         InstallState::ArtifactReady { artifact } => {
-            render_header(f, chunks[0], "Version Ready");
+            render_header(f, chunks[0], "Version Ready", &block_title);
             let text = vec![
                 Line::from(format!("File:  {}", artifact.filename)),
                 Line::from(format!("URL:   {}", artifact.download_url)),
@@ -169,7 +190,7 @@ pub(crate) fn render_install_screen(
             } else {
                 format!("{} downloaded", format_bytes(downloaded))
             };
-            render_header(f, chunks[0], "Downloading");
+            render_header(f, chunks[0], "Downloading", &block_title);
             let content = Paragraph::new(Line::from("Downloading..."))
                 .block(Block::default().borders(Borders::ALL).title("Progress"));
             f.render_widget(content, chunks[1]);
@@ -182,7 +203,7 @@ pub(crate) fn render_install_screen(
         }
         InstallState::Installed { jdk_path } => {
             let path_str = jdk_path.display().to_string();
-            render_header(f, chunks[0], "Installed");
+            render_header(f, chunks[0], "Installed", &block_title);
             let content = Paragraph::new(Line::from(vec![
                 ratatui::text::Span::styled(
                     "\u{2705} Installed: ",
@@ -193,11 +214,11 @@ pub(crate) fn render_install_screen(
             .block(Block::default().borders(Borders::ALL).title("Done"));
             f.render_widget(content, chunks[1]);
             render_empty_gauge(f, chunks[2]);
-            render_help(f, chunks[3], "y: Switch to this JDK   n/Ctrl+C: Return");
+            render_help(f, chunks[3], "Press y to switch   n/Ctrl+C to skip");
         }
         InstallState::Failed { message } => {
             let message = message.clone();
-            render_header(f, chunks[0], "Error");
+            render_header(f, chunks[0], "Error", &block_title);
             let content = Paragraph::new(Line::from(vec![
                 ratatui::text::Span::styled("\u{274c} Error: ", Style::default().fg(Color::Red)),
                 ratatui::text::Span::raw(message),
@@ -214,9 +235,12 @@ pub(crate) fn render_install_screen(
 // Private render helpers
 // ---------------------------------------------------------------------------
 
-fn render_header(f: &mut Frame, area: ratatui::layout::Rect, title: &str) {
-    let header = Paragraph::new(Line::from(title.to_owned()))
-        .block(Block::default().borders(Borders::ALL).title("Install JDK"));
+fn render_header(f: &mut Frame, area: ratatui::layout::Rect, title: &str, block_title: &str) {
+    let header = Paragraph::new(Line::from(title.to_owned())).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(block_title.to_owned()),
+    );
     f.render_widget(header, area);
 }
 
@@ -367,7 +391,7 @@ mod tests {
         let mut terminal = Terminal::new(backend).unwrap();
         let mut state = InstallState::VendorPicker { selected: 0 };
         let result = terminal.draw(|f| {
-            render_install_screen(f, &mut state, f.area());
+            render_install_screen(f, &mut state, f.area(), None);
         });
         assert!(result.is_ok());
     }
@@ -381,7 +405,7 @@ mod tests {
             total: Some(104_857_600),
         };
         let result = terminal.draw(|f| {
-            render_install_screen(f, &mut state, f.area());
+            render_install_screen(f, &mut state, f.area(), Some(&Vendor::OpenJdk));
         });
         assert!(result.is_ok());
     }
@@ -395,7 +419,7 @@ mod tests {
             total: None,
         };
         let result = terminal.draw(|f| {
-            render_install_screen(f, &mut state, f.area());
+            render_install_screen(f, &mut state, f.area(), Some(&Vendor::GraalVm));
         });
         assert!(result.is_ok());
     }
@@ -408,7 +432,7 @@ mod tests {
             message: "Connection refused".to_owned(),
         };
         let result = terminal.draw(|f| {
-            render_install_screen(f, &mut state, f.area());
+            render_install_screen(f, &mut state, f.area(), None);
         });
         assert!(result.is_ok());
     }
@@ -421,7 +445,7 @@ mod tests {
             vendor: Vendor::OpenJdk,
         };
         let result = terminal.draw(|f| {
-            render_install_screen(f, &mut state, f.area());
+            render_install_screen(f, &mut state, f.area(), Some(&Vendor::OpenJdk));
         });
         assert!(result.is_ok());
     }
@@ -436,9 +460,58 @@ mod tests {
             selected: 2,
         };
         let result = terminal.draw(|f| {
-            render_install_screen(f, &mut state, f.area());
+            render_install_screen(f, &mut state, f.area(), Some(&Vendor::OpenJdk));
         });
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_render_install_installed_shows_switch_prompt() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut state = InstallState::Installed {
+            jdk_path: PathBuf::from("/usr/lib/jvm/temurin-21-jdk"),
+        };
+        terminal
+            .draw(|f| {
+                render_install_screen(f, &mut state, f.area(), Some(&Vendor::OpenJdk));
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let content = buffer.content();
+
+        // The help bar should contain the switch prompt text.
+        let has_y_prompt = content
+            .iter()
+            .any(|cell: &ratatui::buffer::Cell| cell.symbol().contains("y"));
+        assert!(has_y_prompt, "Installed state should show 'y' prompt");
+    }
+
+    #[test]
+    fn test_vendor_label_in_block_title() {
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+        let mut state = InstallState::FetchingVersions {
+            vendor: Vendor::OpenJdk,
+        };
+        terminal
+            .draw(|f| {
+                render_install_screen(f, &mut state, f.area(), Some(&Vendor::OpenJdk));
+            })
+            .unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let content = buffer.content();
+
+        // The block title should contain vendor-related text.
+        let has_adoptium = content
+            .iter()
+            .any(|cell: &ratatui::buffer::Cell| cell.symbol().contains("A"));
+        assert!(
+            has_adoptium,
+            "Block title should contain vendor name characters"
+        );
     }
 
     // --- format_bytes ---

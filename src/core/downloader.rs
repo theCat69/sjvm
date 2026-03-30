@@ -504,7 +504,14 @@ pub(crate) fn install_jdk(
             }
         }
 
-        // Step 8 — invalidate the in-process JDK discovery cache.
+        // Step 8 — write the `.sjvm-managed` marker file so `list` and the TUI
+        // can distinguish sjvm-managed JDKs from manually-installed ones.
+        let marker_path = final_dest.join(".sjvm-managed");
+        if let Err(e) = std::fs::write(&marker_path, b"") {
+            eprintln!("Warning: could not write .sjvm-managed marker: {e}");
+        }
+
+        // Step 9 — invalidate the in-process JDK discovery cache.
         crate::infra::memory::invalidate_memory();
 
         Ok(final_dest)

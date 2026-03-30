@@ -16,6 +16,7 @@ use crate::commands::ui::install_screen::{
     CatalogEvent, DownloadEvent, InstallState, VersionsEvent,
 };
 use crate::commands::ui::switch_screen::SwitchState;
+use crate::core::jdk_catalog::Vendor;
 
 #[derive(Debug, Clone, PartialEq)]
 enum Screen {
@@ -30,6 +31,9 @@ struct App {
     download_rx: Option<mpsc::Receiver<DownloadEvent>>,
     catalog_rx: Option<mpsc::Receiver<CatalogEvent>>,
     versions_rx: Option<mpsc::Receiver<VersionsEvent>>,
+    /// The vendor selected in the VendorPicker, carried through all later states
+    /// so the install screen can display it in the block title.
+    install_vendor: Option<Vendor>,
 }
 
 impl App {
@@ -41,6 +45,7 @@ impl App {
             download_rx: None,
             catalog_rx: None,
             versions_rx: None,
+            install_vendor: None,
         })
     }
 }
@@ -83,6 +88,7 @@ fn render_ui(f: &mut Frame, app: &mut App) {
                 f,
                 &mut app.install,
                 chunks[1],
+                app.install_vendor.as_ref(),
             );
         }
     }
@@ -103,6 +109,14 @@ fn run_app_loop(terminal: &mut ratatui::DefaultTerminal) -> anyhow::Result<()> {
                     }
                     Ok(DownloadEvent::Done { jdk_dir }) => {
                         app.install = InstallState::Installed { jdk_path: jdk_dir };
+                        // Reload switch screen so newly-installed JDK appears in list.
+                        app.switch = match SwitchState::new() {
+                            Ok(s) => s,
+                            Err(e) => SwitchState {
+                                success_message: Some(format!("Error reloading JDK list: {e}")),
+                                ..SwitchState::default()
+                            },
+                        };
                         app.download_rx = None;
                         break;
                     }
@@ -211,15 +225,13 @@ fn handle_switch_key(app: &mut App, key: KeyEvent) -> anyhow::Result<()> {
                 if let Some(name) = app.switch.delete_confirm.take() {
                     match delete_jdk(&name) {
                         Ok(_) => {
-                            app.switch = SwitchState::new().unwrap_or_else(|_| SwitchState {
-                                items: vec![],
-                                list_state: ratatui::widgets::ListState::default(),
-                                selected_index: None,
-                                current_jdk: None,
-                                success_message: Some("Deleted — please reload".to_owned()),
-                                success_shown_at: Some(std::time::Instant::now()),
-                                delete_confirm: None,
-                            });
+                            app.switch = match SwitchState::new() {
+                                Ok(s) => s,
+                                Err(e) => SwitchState {
+                                    success_message: Some(format!("Error reloading JDK list: {e}")),
+                                    ..SwitchState::default()
+                                },
+                            };
                         }
                         Err(e) => {
                             app.switch.success_message = Some(format!("Delete failed: {e}"));
@@ -281,16 +293,18 @@ fn handle_install_key(app: &mut App, key: KeyEvent) -> anyhow::Result<()> {
                 }
                 KeyCode::Enter => {
                     let vendor = if selected == 0 {
-                        crate::core::jdk_catalog::Vendor::OpenJdk
+                        Vendor::OpenJdk
                     } else {
-                        crate::core::jdk_catalog::Vendor::GraalVm
+                        Vendor::GraalVm
                     };
+                    app.install_vendor = Some(vendor.clone());
                     let (tx, rx) = mpsc::channel::<VersionsEvent>();
                     app.versions_rx = Some(rx);
                     spawn_versions_fetch(vendor.clone(), tx);
                     app.install = InstallState::FetchingVersions { vendor };
                 }
                 _ if ctrl_c => {
+                    app.install_vendor = None;
                     app.screen = Screen::Switch;
                 }
                 _ => {}
@@ -299,6 +313,7 @@ fn handle_install_key(app: &mut App, key: KeyEvent) -> anyhow::Result<()> {
         InstallState::FetchingVersions { .. } => {
             if ctrl_c {
                 app.install = InstallState::VendorPicker { selected: 0 };
+                app.install_vendor = None;
                 app.versions_rx = None;
             }
         }
@@ -313,6 +328,7 @@ fn handle_install_key(app: &mut App, key: KeyEvent) -> anyhow::Result<()> {
 
             if ctrl_c {
                 app.install = InstallState::VendorPicker { selected: 0 };
+                app.install_vendor = None;
             } else {
                 match key.code {
                     KeyCode::Up | KeyCode::Char('k') => {
@@ -352,6 +368,7 @@ fn handle_install_key(app: &mut App, key: KeyEvent) -> anyhow::Result<()> {
         InstallState::FetchingArtifact { .. } => {
             if ctrl_c {
                 app.install = InstallState::VendorPicker { selected: 0 };
+                app.install_vendor = None;
                 app.catalog_rx = None;
             }
         }
@@ -359,6 +376,7 @@ fn handle_install_key(app: &mut App, key: KeyEvent) -> anyhow::Result<()> {
             let artifact = artifact.clone();
             if ctrl_c {
                 app.install = InstallState::VendorPicker { selected: 0 };
+                app.install_vendor = None;
             } else if key.code == KeyCode::Enter {
                 let dest_dir = match config().jdks_dirs.first() {
                     Some(d) => std::path::PathBuf::from(d),
@@ -383,18 +401,27 @@ fn handle_install_key(app: &mut App, key: KeyEvent) -> anyhow::Result<()> {
         }
         InstallState::Installed { jdk_path } => {
             let jdk_path = jdk_path.clone();
-            if key.code == KeyCode::Char('y') {
+            if key.code == KeyCode::Char('y') || key.code == KeyCode::Char('Y') {
                 crate::core::jdk_switcher::switch_to_jdk(&jdk_path)?;
-                app.switch = SwitchState::new()?;
-                app.install = InstallState::VendorPicker { selected: 0 };
+                app.switch = match SwitchState::new() {
+                    Ok(s) => s,
+                    Err(e) => SwitchState {
+                        success_message: Some(format!("Error reloading JDK list: {e}")),
+                        ..SwitchState::default()
+                    },
+                };
                 app.screen = Screen::Switch;
-            } else if ctrl_c || key.code == KeyCode::Char('n') {
                 app.install = InstallState::VendorPicker { selected: 0 };
+                app.install_vendor = None;
+            } else if ctrl_c || key.code == KeyCode::Char('n') || key.code == KeyCode::Char('N') {
+                app.install = InstallState::VendorPicker { selected: 0 };
+                app.install_vendor = None;
             }
         }
         InstallState::Failed { .. } => {
             if ctrl_c {
                 app.install = InstallState::VendorPicker { selected: 0 };
+                app.install_vendor = None;
             }
         }
     }

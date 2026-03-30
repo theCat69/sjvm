@@ -6,7 +6,7 @@ use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::Line,
+    text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 
@@ -14,6 +14,7 @@ use crate::core::jdk_switcher::{jdk_display_name, switch_to_jdk};
 use crate::infra::memory::memory;
 use crate::infra::symlinks::symlink_path;
 
+#[derive(Default)]
 pub(crate) struct SwitchState {
     pub(super) items: Vec<JdkItem>,
     pub(super) list_state: ListState,
@@ -30,11 +31,13 @@ pub(crate) struct JdkItem {
     pub(super) path: PathBuf,
     pub(super) display_name: String,
     pub(super) is_current: bool,
+    /// `true` if the JDK was not installed by sjvm (no `.sjvm-managed` marker).
+    pub(super) is_custom: bool,
 }
 
 impl SwitchState {
     pub(crate) fn new() -> anyhow::Result<Self> {
-        let jdks = &memory().jdks;
+        let jdks = memory().jdks;
         let current_link = symlink_path();
         // If the symlink cannot be read, fall back to an empty path so the TUI
         // still renders — the current indicator simply won't be shown.
@@ -49,6 +52,7 @@ impl SwitchState {
         for (index, jdk) in jdks.iter().enumerate() {
             let is_current = jdk == &current;
             let display_name = jdk_display_name(jdk);
+            let is_custom = !jdk.join(".sjvm-managed").exists();
 
             if is_current {
                 selected_index = Some(index);
@@ -59,6 +63,7 @@ impl SwitchState {
                 path: jdk.clone(),
                 display_name,
                 is_current,
+                is_custom,
             });
         }
 
@@ -184,8 +189,14 @@ pub(crate) fn render_switch_screen(
         .iter()
         .map(|item| {
             let prefix = if item.is_current { "\u{2192} " } else { "  " };
-            let line = Line::from(format!("{} {}", prefix, item.display_name));
-            ListItem::new(line)
+            let mut spans = vec![Span::raw(format!("{} {}", prefix, item.display_name))];
+            if item.is_custom {
+                spans.push(Span::styled(
+                    " [custom]",
+                    Style::default().fg(Color::DarkGray),
+                ));
+            }
+            ListItem::new(Line::from(spans))
         })
         .collect();
 
@@ -263,16 +274,19 @@ mod tests {
                     path: PathBuf::from("/test/jdk-11"),
                     display_name: "jdk-11".to_string(),
                     is_current: true,
+                    is_custom: false,
                 },
                 JdkItem {
                     path: PathBuf::from("/test/jdk-17"),
                     display_name: "jdk-17".to_string(),
                     is_current: false,
+                    is_custom: false,
                 },
                 JdkItem {
                     path: PathBuf::from("/test/jdk-21"),
                     display_name: "jdk-21".to_string(),
                     is_current: false,
+                    is_custom: false,
                 },
             ],
             list_state,
@@ -394,15 +408,7 @@ mod tests {
 
     #[test]
     fn test_navigation_on_empty_list() {
-        let mut app = SwitchState {
-            items: vec![],
-            list_state: ListState::default(),
-            selected_index: None,
-            current_jdk: None,
-            success_message: None,
-            success_shown_at: None,
-            delete_confirm: None,
-        };
+        let mut app = SwitchState::default();
         // Neither next() nor previous() should panic on an empty list
         app.next();
         assert_eq!(app.selected_index, None);
@@ -439,5 +445,75 @@ mod tests {
 
         let result = terminal.draw(|f| render_switch_screen(f, &mut app, f.area()));
         assert!(result.is_ok(), "delete overlay rendering should not fail");
+    }
+
+    /// `is_custom` is `true` when the `.sjvm-managed` marker file is absent.
+    #[test]
+    fn test_is_custom_true_when_marker_absent() {
+        let dir = std::env::temp_dir().join(format!("sjvm_test_custom_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        // No .sjvm-managed file created — should be detected as custom.
+        let is_custom = !dir.join(".sjvm-managed").exists();
+        assert!(is_custom, "JDK without .sjvm-managed should be custom");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `is_custom` is `false` when the `.sjvm-managed` marker file is present.
+    #[test]
+    fn test_is_custom_false_when_marker_present() {
+        let dir = std::env::temp_dir().join(format!("sjvm_test_managed_{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(".sjvm-managed"), b"").unwrap();
+        let is_custom = !dir.join(".sjvm-managed").exists();
+        assert!(!is_custom, "JDK with .sjvm-managed should NOT be custom");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// `[custom]` suffix is rendered for JDK items with `is_custom = true`.
+    #[test]
+    fn test_custom_indicator_renders_in_list() {
+        let mut list_state = ListState::default();
+        list_state.select(Some(0));
+
+        let mut app = SwitchState {
+            items: vec![
+                JdkItem {
+                    path: PathBuf::from("/test/custom-jdk"),
+                    display_name: "custom-jdk".to_string(),
+                    is_current: true,
+                    is_custom: true,
+                },
+                JdkItem {
+                    path: PathBuf::from("/test/managed-jdk"),
+                    display_name: "managed-jdk".to_string(),
+                    is_current: false,
+                    is_custom: false,
+                },
+            ],
+            list_state,
+            selected_index: Some(0),
+            current_jdk: Some(PathBuf::from("/test/custom-jdk")),
+            success_message: None,
+            success_shown_at: None,
+            delete_confirm: None,
+        };
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        terminal
+            .draw(|f| render_switch_screen(f, &mut app, f.area()))
+            .unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let content = buffer.content();
+
+        let custom_found = content.iter().any(|cell: &ratatui::buffer::Cell| {
+            cell.symbol().contains("c") || cell.symbol() == "["
+        });
+        assert!(
+            custom_found,
+            "buffer should contain characters from [custom]"
+        );
     }
 }
