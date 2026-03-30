@@ -268,19 +268,27 @@ fn install_jdk_for_test(version: u16, vendor: &str) -> String {
         "sjvm install {version} --vendor {vendor} --force failed, stderr: {stderr}"
     );
 
+    // Find the installed JDK by checking the vendor file contents so that when
+    // multiple JDKs share the same version number (e.g. openjdk-21 and graalvm-21)
+    // we pick the one actually tagged with the requested vendor.
     let lines = list_jdks();
     lines
         .iter()
-        .find(|line| line.contains(&version_str) && !line.contains("[custom]"))
+        .filter(|line| line.contains(&version_str) && !line.contains("[custom]"))
         .map(|line| {
             let stripped = line.trim().trim_start_matches('→').trim();
             let stripped = stripped.trim_end_matches("[custom]").trim();
-            // extract bare dir name regardless of whether it's a full path or just a name
             std::path::Path::new(stripped)
                 .file_name()
                 .expect("JDK path has file_name")
                 .to_string_lossy()
                 .into_owned()
+        })
+        .find(|name| {
+            let vendor_file = jdks_dir().join(name).join(".sjvm-vendor");
+            std::fs::read_to_string(&vendor_file)
+                .map(|s| s.trim().eq_ignore_ascii_case(vendor))
+                .unwrap_or(false)
         })
         .expect("installed JDK not found in sjvm list after install")
 }
@@ -684,11 +692,12 @@ fn test_ui_delete() {
     );
 }
 
-/// Returns the configured JDKs directory — hardcoded to `/opt/jdks` for the
-/// Docker test environment, which is what the sjvm config is set to in the
-/// Docker Compose setup.
+/// Returns the configured JDKs directory for the Docker test environment.
+///
+/// Matches the `jdks_dirs` value in `test-config/sjvm-conf.json`, which is
+/// volume-mounted into `/home/rustuser/.config/sjvm` inside the container.
 fn jdks_dir() -> std::path::PathBuf {
-    std::path::PathBuf::from("/opt/jdks")
+    std::path::PathBuf::from("/home/rustuser/jvms")
 }
 
 #[test]
