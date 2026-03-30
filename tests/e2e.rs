@@ -255,3 +255,165 @@ fn test_ui_java_version_switch() {
         final_java_v
     );
 }
+
+fn list_jdks() -> Vec<String> {
+    let output = sjvm_command()
+        .arg("list")
+        .output()
+        .expect("Failed to run sjvm list");
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|l| !l.trim().is_empty())
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+#[ignore]
+fn test_install_help() {
+    let output = sjvm_command()
+        .args(["install", "--help"])
+        .output()
+        .expect("Failed to run sjvm install --help");
+
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("--vendor"),
+        "stdout should contain '--vendor': {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("--force"),
+        "stdout should contain '--force': {}",
+        stdout
+    );
+    assert!(
+        stdout.contains("VERSION"),
+        "stdout should contain 'VERSION': {}",
+        stdout
+    );
+}
+
+#[test]
+#[ignore]
+fn test_install_version_too_low() {
+    let output = sjvm_command()
+        .args(["install", "5"])
+        .output()
+        .expect("Failed to run sjvm install 5");
+
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit for version 5"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains('5'),
+        "stderr should contain '5': {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("out of range"),
+        "stderr should contain 'out of range': {}",
+        stderr
+    );
+}
+
+#[test]
+#[ignore]
+fn test_install_version_too_high() {
+    let output = sjvm_command()
+        .args(["install", "26"])
+        .output()
+        .expect("Failed to run sjvm install 26");
+
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit for version 26"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("26"),
+        "stderr should contain '26': {}",
+        stderr
+    );
+    assert!(
+        stderr.contains("out of range"),
+        "stderr should contain 'out of range': {}",
+        stderr
+    );
+}
+
+#[test]
+#[ignore]
+fn test_install_version_invalid_chars() {
+    let output = sjvm_command()
+        .args(["install", "foo!bar"])
+        .output()
+        .expect("Failed to run sjvm install foo!bar");
+
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit for version 'foo!bar'"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("illegal"),
+        "stderr should contain 'illegal': {}",
+        stderr
+    );
+}
+
+#[test]
+#[ignore]
+fn test_install_openjdk_21() {
+    let before = list_jdks();
+
+    let output = sjvm_command()
+        .args(["install", "21", "--vendor", "openjdk", "--force"])
+        .output()
+        .expect("Failed to run sjvm install 21 --vendor openjdk --force");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "Expected exit 0 for openjdk 21 install, stderr: {}",
+        stderr
+    );
+
+    let after = list_jdks();
+    let new_entries: Vec<&String> = after
+        .iter()
+        .filter(|e| !before.contains(e) && e.contains("21"))
+        .collect();
+    assert!(
+        !new_entries.is_empty(),
+        "Expected a new entry with '21' in sjvm list after install. before={:?}, after={:?}",
+        before,
+        after
+    );
+}
+
+#[test]
+#[ignore]
+fn test_install_graalvm_21() {
+    let output = sjvm_command()
+        .args(["install", "21", "--vendor", "graalvm", "--force"])
+        .output()
+        .expect("Failed to run sjvm install 21 --vendor graalvm --force");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "Expected exit 0 for graalvm 21 install, stderr: {}",
+        stderr
+    );
+
+    let after = list_jdks();
+    assert!(
+        after.iter().any(|e| e.contains("graalvm")),
+        "Expected an entry containing 'graalvm' in sjvm list after install. after={:?}",
+        after
+    );
+}
