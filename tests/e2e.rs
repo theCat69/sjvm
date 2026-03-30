@@ -199,7 +199,7 @@ fn test_ui_java_version_switch() {
 
     // Send navigation and selection commands through the PTY
     // Send 'j' to navigate down to the next JDK version
-    pty.write_all(b"j").expect("Failed to write 'j' to PTY");
+    pty.write_all(b"jj").expect("Failed to write 'j' to PTY");
 
     // Wait a bit for the UI to process the navigation
     thread::sleep(Duration::from_millis(150));
