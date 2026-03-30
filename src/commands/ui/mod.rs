@@ -94,6 +94,13 @@ fn render_ui(f: &mut Frame, app: &mut App) {
     }
 }
 
+fn reload_switch_state(error_prefix: &str, e: &anyhow::Error) -> SwitchState {
+    SwitchState {
+        success_message: Some(format!("{error_prefix}: {e}")),
+        ..SwitchState::default()
+    }
+}
+
 fn run_app_loop(terminal: &mut ratatui::DefaultTerminal) -> anyhow::Result<()> {
     let mut app = App::new()?;
 
@@ -110,13 +117,9 @@ fn run_app_loop(terminal: &mut ratatui::DefaultTerminal) -> anyhow::Result<()> {
                     Ok(DownloadEvent::Done { jdk_dir }) => {
                         app.install = InstallState::Installed { jdk_path: jdk_dir };
                         // Reload switch screen so newly-installed JDK appears in list.
-                        app.switch = match SwitchState::new() {
-                            Ok(s) => s,
-                            Err(e) => SwitchState {
-                                success_message: Some(format!("Error reloading JDK list: {e}")),
-                                ..SwitchState::default()
-                            },
-                        };
+                        app.switch = SwitchState::new().unwrap_or_else(|e| {
+                            reload_switch_state("Error reloading JDK list", &e)
+                        });
                         app.download_rx = None;
                         break;
                     }
@@ -225,13 +228,9 @@ fn handle_switch_key(app: &mut App, key: KeyEvent) -> anyhow::Result<()> {
                 if let Some(name) = app.switch.delete_confirm.take() {
                     match delete_jdk(&name) {
                         Ok(_) => {
-                            app.switch = match SwitchState::new() {
-                                Ok(s) => s,
-                                Err(e) => SwitchState {
-                                    success_message: Some(format!("Error reloading JDK list: {e}")),
-                                    ..SwitchState::default()
-                                },
-                            };
+                            app.switch = SwitchState::new().unwrap_or_else(|e| {
+                                reload_switch_state("Error reloading JDK list", &e)
+                            });
                         }
                         Err(e) => {
                             app.switch.success_message = Some(format!("Delete failed: {e}"));
@@ -403,13 +402,8 @@ fn handle_install_key(app: &mut App, key: KeyEvent) -> anyhow::Result<()> {
             let jdk_path = jdk_path.clone();
             if key.code == KeyCode::Char('y') || key.code == KeyCode::Char('Y') {
                 crate::core::jdk_switcher::switch_to_jdk(&jdk_path)?;
-                app.switch = match SwitchState::new() {
-                    Ok(s) => s,
-                    Err(e) => SwitchState {
-                        success_message: Some(format!("Error reloading JDK list: {e}")),
-                        ..SwitchState::default()
-                    },
-                };
+                app.switch = SwitchState::new()
+                    .unwrap_or_else(|e| reload_switch_state("Error reloading JDK list", &e));
                 app.screen = Screen::Switch;
                 app.install = InstallState::VendorPicker { selected: 0 };
                 app.install_vendor = None;

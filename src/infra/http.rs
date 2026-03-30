@@ -1,9 +1,4 @@
 //! HTTP utilities for sjvm — all I/O is HTTPS-only, TLS via rustls.
-//!
-//! These items are consumed by the `install` command (Phase 2). Until that
-//! command exists the public functions are unused at the crate level; the
-//! `#[allow(dead_code)]` attributes below are intentional and will be removed
-//! in Phase 2 when the callers are wired up.
 
 use std::{
     env,
@@ -104,14 +99,11 @@ fn require_https(url: &str) -> Result<()> {
 
 // ---------------------------------------------------------------------------
 // Public API
-// Phase 2 (install command) will call these; the allow(dead_code) attributes
-// are temporary and will be removed when callers are wired in.
 // ---------------------------------------------------------------------------
 
 /// Issues a GET request to `url` and deserialises the response body as JSON.
 ///
 /// Uses a 30-second total timeout. Requires an `https://` URL.
-#[allow(dead_code)] // removed in Phase 2 when install command calls this
 pub(crate) fn get_json(url: &str) -> Result<Value> {
     require_https(url)?;
 
@@ -133,7 +125,6 @@ pub(crate) fn get_json(url: &str) -> Result<Value> {
 /// Issues a GET request to `url` and returns the response body as a UTF-8 string.
 ///
 /// Uses a 30-second total timeout. Requires an `https://` URL.
-#[allow(dead_code)] // removed in Phase 2 when install command calls this
 pub(crate) fn get_text(url: &str) -> Result<String> {
     require_https(url)?;
 
@@ -157,7 +148,6 @@ pub(crate) fn get_text(url: &str) -> Result<String> {
 /// `total` is `Some(n)` when the server supplies a `Content-Length` header;
 /// otherwise `None`.  Uses a 600-second total timeout. Requires an `https://` URL.
 /// The output file is written via [`BufWriter`] for efficiency.
-#[allow(dead_code)] // removed in Phase 2 when install command calls this
 pub(crate) fn download_streaming(
     url: &str,
     dest: &Path,

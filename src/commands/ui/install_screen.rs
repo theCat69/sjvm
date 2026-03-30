@@ -504,13 +504,12 @@ mod tests {
         let buffer = terminal.backend().buffer();
         let content = buffer.content();
 
-        // The block title should contain vendor-related text.
-        let has_adoptium = content
-            .iter()
-            .any(|cell: &ratatui::buffer::Cell| cell.symbol().contains("A"));
+        // The block title is " Install JDK — OpenJDK (Adoptium) ".
+        // Collect all rendered symbols into one string and search for the vendor substring.
+        let rendered: String = content.iter().map(|cell| cell.symbol()).collect();
         assert!(
-            has_adoptium,
-            "Block title should contain vendor name characters"
+            rendered.contains("OpenJDK"),
+            "Block title should contain 'OpenJDK', got rendered buffer without it"
         );
     }
 

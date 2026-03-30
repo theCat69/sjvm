@@ -29,29 +29,18 @@ pub(crate) struct Config {
     pub(crate) jdks_dirs: Vec<String>,
 }
 
-impl Default for Config {
-    fn default() -> Self {
-        Config {
-            symlink_dir: default_symlink_dir(),
-            jdks_dirs: default_jdks_dirs(),
-        }
-    }
-}
-
-fn default_symlink_dir() -> String {
+fn default_symlink_dir() -> Option<String> {
     if cfg!(target_os = "windows") {
-        "C:\\Java\\current".to_owned()
-    } else if let Some(user_dirs) = UserDirs::new() {
-        user_dirs
-            .home_dir()
-            .join(".java")
-            .join("current")
-            .to_string_lossy()
-            .into_owned()
+        Some("C:\\Java\\current".to_owned())
     } else {
-        panic!(
-            "Cannot determine home directory; set HOME or configure symlink_dir in sjvm-conf.json"
-        )
+        UserDirs::new().map(|user_dirs| {
+            user_dirs
+                .home_dir()
+                .join(".java")
+                .join("current")
+                .to_string_lossy()
+                .into_owned()
+        })
     }
 }
 
@@ -82,7 +71,12 @@ fn init_config() -> anyhow::Result<Config> {
         let value: Value = serde_json::from_slice(&content).context("Cannot deserialize config")?;
         merge_config(value)
     } else {
-        Ok(Config::default())
+        let symlink_dir = default_symlink_dir()
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine platform data directory"))?;
+        Ok(Config {
+            symlink_dir,
+            jdks_dirs: default_jdks_dirs(),
+        })
     }
 }
 
@@ -122,7 +116,8 @@ fn merge_config(config_value: Value) -> anyhow::Result<Config> {
     let jdks_dirs_value = &config_value["jdks_dirs"];
 
     let symlink_dir = match symlink_dir_value {
-        Value::Null => default_symlink_dir(),
+        Value::Null => default_symlink_dir()
+            .ok_or_else(|| anyhow::anyhow!("Cannot determine platform data directory"))?,
         Value::String(s) => {
             validate_no_traversal(s, "symlink_dir")?;
             #[cfg(unix)]

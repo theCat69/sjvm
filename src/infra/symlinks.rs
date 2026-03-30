@@ -9,17 +9,12 @@ pub(crate) fn symlink_path() -> PathBuf {
     PathBuf::from(&config().symlink_dir)
 }
 
-/// Creates (or replaces) a directory symlink at `link` pointing to `target`.
-///
-/// Removal of any existing symlink is performed unconditionally before
-/// creation to avoid a TOCTOU race between an existence check and the
-/// remove call.
+/// Removes an existing symlink (or directory junction on Windows) at `link`,
+/// tolerating the case where it is already absent.
 ///
 /// # Errors
-/// Returns an error if the existing symlink cannot be removed (for reasons
-/// other than it being absent) or if symlink creation fails.
-pub(crate) fn create_symlink(target: &Path, link: &Path) -> anyhow::Result<()> {
-    // Unconditional removal avoids a TOCTOU race between exists() and remove.
+/// Returns an error if the path exists but cannot be removed.
+fn remove_existing_link(link: &Path) -> anyhow::Result<()> {
     #[cfg(target_os = "windows")]
     {
         match std::fs::remove_dir(link) {
@@ -42,6 +37,20 @@ pub(crate) fn create_symlink(target: &Path, link: &Path) -> anyhow::Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+/// Creates (or replaces) a directory symlink at `link` pointing to `target`.
+///
+/// Removal of any existing symlink is performed unconditionally before
+/// creation to avoid a TOCTOU race between an existence check and the
+/// remove call.
+///
+/// # Errors
+/// Returns an error if the existing symlink cannot be removed (for reasons
+/// other than it being absent) or if symlink creation fails.
+pub(crate) fn create_symlink(target: &Path, link: &Path) -> anyhow::Result<()> {
+    remove_existing_link(link)?;
 
     #[cfg(target_os = "windows")]
     std::os::windows::fs::symlink_dir(target, link)

@@ -37,11 +37,6 @@ pub(crate) fn validate_delete_name(s: &str) -> Result<String, String> {
     if s.contains('\\') {
         return Err("JDK name must not contain '\\'".to_owned());
     }
-    if s == ".." || s.contains("/../") || s.ends_with("/..") || s.starts_with("../") {
-        return Err("JDK name must not contain path traversal ('..')".to_owned());
-    }
-    // Simpler check: if the name itself is ".." after splitting on / (already blocked above),
-    // also block any name that is exactly ".." or starts with ".."
     if s.starts_with("..") {
         return Err("JDK name must not start with '..'".to_owned());
     }

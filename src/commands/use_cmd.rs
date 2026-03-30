@@ -216,24 +216,6 @@ mod tests {
     }
 
     #[test]
-    fn test_use_version_output_format() {
-        // Test that we can construct the expected output format
-        let jdk_path = PathBuf::from("/usr/lib/jvm/temurin-17-jdk");
-        let jdk_path_display = jdk_path.to_string_lossy();
-        let output = format!("✅ Now using JDK: {jdk_path_display}");
-        assert!(output.contains("✅"));
-        assert!(output.contains("temurin-17"));
-    }
-
-    #[test]
-    fn test_version_not_found_output_format() {
-        let version = "99";
-        let output = format!("❌ JDK version '{version}' not found.");
-        assert!(output.contains("❌"));
-        assert!(output.contains("99"));
-    }
-
-    #[test]
     fn test_local_env_commands_unix() {
         // Use a real path with no metacharacters to test the function directly.
         let jdk_path = PathBuf::from("/usr/lib/jvm/temurin-17-jdk");

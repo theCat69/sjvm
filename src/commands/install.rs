@@ -17,18 +17,7 @@ use crate::infra::config::config;
 /// If the leading token is an integer it must be in the range 8–25.
 /// Non-numeric strings (e.g. `"temurin-21"`) pass through unchanged.
 pub(crate) fn validate_install_version(s: &str) -> Result<String, String> {
-    if s.is_empty() {
-        return Err("version cannot be empty".to_owned());
-    }
-    if s.len() > 64 {
-        return Err("version string too long (max 64 chars)".to_owned());
-    }
-    if !s.chars().all(|c| c.is_alphanumeric() || "-._".contains(c)) {
-        return Err(
-            "version contains illegal characters (only alphanumeric, '-', '.', '_' allowed)"
-                .to_owned(),
-        );
-    }
+    crate::commands::validate_version_string(s)?;
 
     // If the string starts with digits, apply the supported-range check.
     let leading_digits: String = s.chars().take_while(|c| c.is_ascii_digit()).collect();
@@ -96,6 +85,9 @@ pub(crate) fn run_install(
         dest_dir,
         force,
     };
+    // Use artifact.version (the resolved JDK major version from the vendor API)
+    // as the authoritative version for error messages and progress output.
+    let artifact_version = request.artifact.version;
 
     // Set up the progress bar.
     let pb = ProgressBar::new(0);
@@ -121,7 +113,7 @@ pub(crate) fn run_install(
         }
         pb.set_position(downloaded);
     })
-    .with_context(|| format!("Failed to install JDK {version_num}"))?;
+    .with_context(|| format!("Failed to install JDK {artifact_version}"))?;
 
     pb.finish_and_clear();
 

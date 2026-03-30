@@ -25,7 +25,6 @@ pub(crate) enum Vendor {
 
 /// Resolved download metadata for a single JDK artifact.
 #[derive(Debug, Clone)]
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) struct ArtifactInfo {
     /// Direct HTTPS download URL for the archive.
     pub(crate) download_url: String,
@@ -48,7 +47,6 @@ pub(crate) struct ArtifactInfo {
 /// Maps [`std::env::consts::OS`] to the Adoptium API `os` parameter.
 ///
 /// Adoptium uses `mac` (not `macos`) for macOS.
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) fn detect_os() -> Result<String> {
     let os_str = std::env::consts::OS;
     let mapped = match os_str {
@@ -61,7 +59,6 @@ pub(crate) fn detect_os() -> Result<String> {
 }
 
 /// Maps [`std::env::consts::ARCH`] to the Adoptium/GraalVM API `architecture` parameter.
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) fn detect_arch() -> Result<String> {
     let arch_str = std::env::consts::ARCH;
     let mapped = match arch_str {
@@ -79,7 +76,6 @@ pub(crate) fn detect_arch() -> Result<String> {
 /// Parses an Adoptium API JSON array response into an [`ArtifactInfo`].
 ///
 /// Expects the full array response (`json` is `&Value::Array`). Index `[0]` is used.
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) fn parse_adoptium_response(json: &Value, version: u16) -> Result<ArtifactInfo> {
     let arr = json
         .as_array()
@@ -134,7 +130,6 @@ fn graalvm_asset_name(version_str: &str, os: &str, arch: &str) -> String {
 /// `json` is the full releases array (already fetched, one page).  
 /// `version` is the desired JDK major version.  
 /// `os` / `arch` are the GraalVM-flavoured tokens (`linux`/`macos`/`windows`, `x64`/`aarch64`).
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) fn parse_graalvm_releases(
     json: &Value,
     version: u16,
@@ -230,7 +225,6 @@ pub(crate) fn parse_graalvm_releases(
 /// Resolves download metadata by querying the vendor's API over HTTPS.
 ///
 /// This function performs real HTTP calls and should not be called in unit tests.
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) fn resolve_artifact(
     vendor: &Vendor,
     version: u16,
