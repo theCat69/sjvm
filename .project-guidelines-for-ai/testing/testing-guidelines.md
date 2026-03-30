@@ -17,7 +17,7 @@ Test conventions and strategies for **sjvm** — a Rust 2024 edition CLI binary.
 
 | Test type | Location | Notes |
 |-----------|----------|-------|
-| Unit tests | Inside `src/*.rs` in `#[cfg(test)] mod tests { ... }` | Co-located with the code under test |
+| Unit tests | Inside `src/**/*.rs` in `#[cfg(test)] mod tests { ... }` | Co-located with the code under test |
 | Integration / E2E tests | `tests/e2e.rs` | Separate test crate; Docker-only |
 
 - Each source file with testable logic should have a `#[cfg(test)]` module at the bottom.
@@ -172,9 +172,9 @@ No enforced coverage threshold currently. Recommended tools:
 - **Cross-platform**: `cargo llvm-cov` — alternative based on LLVM instrumentation.
 
 Focus coverage efforts on:
-- `jdk_switcher.rs` — pure functions with high testability.
-- `config.rs` — config parsing and merging logic.
-- `symlinks.rs` — platform-specific logic (test on both platforms if possible).
+- `core/jdk_switcher.rs` — pure functions with high testability.
+- `infra/config.rs` — config parsing and merging logic.
+- `infra/symlinks.rs` — platform-specific logic (test on both platforms if possible).
 
 ---
 

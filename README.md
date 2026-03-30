@@ -248,12 +248,12 @@ The Docker setup includes:
 ### Core Components
 
 - **CLI Interface** (`main.rs`) — Command-line parsing and routing using clap
-- **Configuration** (`config.rs`) — JSON-based configuration management with cross-platform directories
-- **JDK Resolution** (`jdk_resolver.rs`) — Automatic JDK discovery and version detection
-- **JDK Switching** (`jdk_switcher.rs`) — Version matching and symlink switch operations
-- **Symlink Management** (`symlinks.rs`) — Cross-platform symlink operations
-- **Memory Management** (`memory.rs`) — Binary cache (bincode) storing current JDK state
-- **Commands** — Individual CLI command implementations (`setup_command.rs`, `use_command.rs`, `list_command.rs`)
+- **Configuration** (`infra/config.rs`) — JSON-based configuration management with cross-platform directories
+- **JDK Resolution** (`core/jdk_resolver.rs`) — Automatic JDK discovery and version detection
+- **JDK Switching** (`core/jdk_switcher.rs`) — Version matching and symlink switch operations
+- **Symlink Management** (`infra/symlinks.rs`) — Cross-platform symlink operations
+- **Memory Management** (`infra/memory.rs`) — Binary cache (bincode) storing current JDK state
+- **Commands** — Individual CLI command implementations (`commands/setup.rs`, `commands/use_cmd.rs`, `commands/list.rs`)
 
 ### Configuration
 

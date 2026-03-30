@@ -38,7 +38,7 @@ rust-mcp-server_cargo-test                        # Run all unit tests
 rust-mcp-server_cargo-test --testname test_name   # Run specific test
 ```
 
-Unit tests are in `#[cfg(test)]` modules within source files (e.g., `src/ui_command.rs`).
+Unit tests are in `#[cfg(test)]` modules within source files (e.g., `src/commands/ui.rs`).
 
 ### E2E Tests (Special Task - Separate Workflow)
 
@@ -57,15 +57,23 @@ docker compose -f ./docker/it-ubuntu-compose.yaml down
 ```
 src/
 ├── main.rs           # CLI entry (clap Parser/Subcommand)
-├── config.rs         # JSON config with OnceLock singleton
-├── jdk_resolver.rs   # JDK discovery
-├── jdk_switcher.rs   # JDK version lookup and symlink switching
-├── symlinks.rs       # Cross-platform symlink ops
-├── memory.rs         # Binary cache (bincode)
-├── app_dirs.rs       # Platform directories
-├── ui_command.rs     # Interactive TUI (ratatui)
-├── *_command.rs      # CLI command implementations
-tests/e2e.rs          # Integration tests (Docker-only)
+├── core/
+│   ├── mod.rs
+│   ├── jdk_resolver.rs   # JDK discovery
+│   └── jdk_switcher.rs   # JDK version lookup and symlink switching
+├── infra/
+│   ├── mod.rs
+│   ├── app_dirs.rs       # Platform directories
+│   ├── config.rs         # JSON config with OnceLock singleton
+│   ├── memory.rs         # Binary cache (bincode)
+│   └── symlinks.rs       # Cross-platform symlink ops
+└── commands/
+    ├── mod.rs
+    ├── list.rs           # Lists known JDKs
+    ├── setup.rs          # First-run setup
+    ├── ui.rs             # Interactive TUI (ratatui, feature-gated)
+    └── use_cmd.rs        # Switches JDK globally or locally
+tests/e2e.rs              # Integration tests (Docker-only)
 ```
 
 ## Environment

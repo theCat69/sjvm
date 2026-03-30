@@ -108,21 +108,21 @@ use crate::config::config;
 
 ### Module Architecture
 
-Flat module structure under `src/`. Each CLI subcommand has its own `*_command.rs` file:
+Module structure under `src/` is organized into three subfolders — `core/`, `infra/`, and `commands/`:
 
 | File | Role |
 |------|------|
 | `main.rs` | CLI entry — clap `Parser`/`Subcommand` dispatch only |
-| `config.rs` | JSON config with `OnceLock` singleton |
-| `jdk_resolver.rs` | JDK discovery — scans `jdks_dirs`; `OnceLock` cached |
-| `jdk_switcher.rs` | JDK lookup and symlink switching; pure testable functions |
-| `symlinks.rs` | Cross-platform symlink creation/removal |
-| `memory.rs` | Binary cache (`bincode`) storing current JDK; persisted to `data_dir` |
-| `app_dirs.rs` | Platform-specific path resolution via `directories::ProjectDirs` |
-| `list_command.rs` | Lists known JDKs; marks current with `→` |
-| `setup_command.rs` | First-run setup: creates symlink, resets memory cache |
-| `use_command.rs` | Switches JDK globally or prints shell env for local use |
-| `ui_command.rs` | Optional TUI (`ratatui`) gated behind `ui` feature flag |
+| `infra/config.rs` | JSON config with `OnceLock` singleton |
+| `core/jdk_resolver.rs` | JDK discovery — scans `jdks_dirs`; `OnceLock` cached |
+| `core/jdk_switcher.rs` | JDK lookup and symlink switching; pure testable functions |
+| `infra/symlinks.rs` | Cross-platform symlink creation/removal |
+| `infra/memory.rs` | Binary cache (`bincode`) storing current JDK; persisted to `data_dir` |
+| `infra/app_dirs.rs` | Platform-specific path resolution via `directories::ProjectDirs` |
+| `commands/list.rs` | Lists known JDKs; marks current with `→` |
+| `commands/setup.rs` | First-run setup: creates symlink, resets memory cache |
+| `commands/use_cmd.rs` | Switches JDK globally or prints shell env for local use |
+| `commands/ui.rs` | Optional TUI (`ratatui`) gated behind `ui` feature flag |
 
 ### Singleton Pattern
 
@@ -214,5 +214,5 @@ enum Commands {
 
 ### No Hardcoded Paths
 
-- Never hardcode paths. Use `directories::ProjectDirs` (via `app_dirs.rs`) for platform-specific data and config directories.
+- Never hardcode paths. Use `directories::ProjectDirs` (via `infra/app_dirs.rs`) for platform-specific data and config directories.
 - Platform defaults are defined in config and resolved at runtime.
