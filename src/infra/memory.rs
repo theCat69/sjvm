@@ -1,14 +1,15 @@
-use anyhow::{Context, bail};
-use bincode::{Decode, Encode, config};
+use anyhow::{bail, Context};
+use bincode::{config, Decode, Encode};
 use std::{
     fs,
     path::{Path, PathBuf},
     sync::OnceLock,
 };
 
-use crate::{
-    app_dirs::app_dirs, config::config, jdk_resolver::detect_jdks, symlinks::symlink_path,
-};
+use crate::core::jdk_resolver::detect_jdks;
+use crate::infra::app_dirs::app_dirs;
+use crate::infra::config::config as app_config;
+use crate::infra::symlinks::symlink_path;
 
 static MEMORY: OnceLock<Memory> = OnceLock::new();
 static MEMORY_FILE: OnceLock<PathBuf> = OnceLock::new();
@@ -68,7 +69,7 @@ fn dump_binaries(memory: &Memory) -> anyhow::Result<()> {
 }
 
 fn validate_cached_memory(memory: Memory) -> anyhow::Result<Memory> {
-    let cfg = config();
+    let cfg = app_config();
     let jdks_dirs: Vec<PathBuf> = cfg.jdks_dirs.iter().map(PathBuf::from).collect();
 
     // Filter out stale entries (directory was removed) and warn.

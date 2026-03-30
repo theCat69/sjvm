@@ -1,8 +1,10 @@
 use std::path::Path;
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 
-use crate::jdk_switcher::{JdkLookupResult, find_jdk_by_version, jdk_display_name, switch_to_jdk};
+use crate::core::jdk_switcher::{
+    find_jdk_by_version, jdk_display_name, switch_to_jdk, JdkLookupResult,
+};
 
 /// Validates that a path does not contain shell metacharacters that would be
 /// dangerous when the output is `eval`'d by the user's shell.
@@ -89,7 +91,7 @@ fn print_local_env_commands(jdk_path: &Path, _display_name: &str) -> anyhow::Res
 mod tests {
     use std::path::PathBuf;
 
-    use crate::jdk_switcher::{JdkLookupResult, find_jdk_by_version_in_list};
+    use crate::core::jdk_switcher::{find_jdk_by_version_in_list, JdkLookupResult};
 
     use super::*;
 

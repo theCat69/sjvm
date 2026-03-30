@@ -1,7 +1,7 @@
 use anyhow::Context;
 
-use crate::memory::memory;
-use crate::symlinks::symlink_path;
+use crate::infra::memory::memory;
+use crate::infra::symlinks::symlink_path;
 
 /// Lists all known JDKs, marking the currently active one with `→`.
 ///

@@ -4,12 +4,12 @@ use std::{
     sync::OnceLock,
 };
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 use directories::UserDirs;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-use crate::app_dirs::app_dirs;
+use crate::infra::app_dirs::app_dirs;
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
 

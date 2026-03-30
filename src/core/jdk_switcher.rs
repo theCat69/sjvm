@@ -1,10 +1,10 @@
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, bail};
+use anyhow::{bail, Context};
 
-use crate::config::config;
-use crate::memory::memory;
-use crate::symlinks::{create_symlink, symlink_path};
+use crate::infra::config::config;
+use crate::infra::memory::memory;
+use crate::infra::symlinks::{create_symlink, symlink_path};
 
 /// Result of a JDK lookup operation.
 #[derive(Debug, Clone, PartialEq)]

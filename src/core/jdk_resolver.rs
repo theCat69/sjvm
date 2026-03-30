@@ -3,7 +3,7 @@ use std::{
     sync::OnceLock,
 };
 
-use crate::config::config;
+use crate::infra::config::config;
 
 static JDKS: OnceLock<Vec<PathBuf>> = OnceLock::new();
 

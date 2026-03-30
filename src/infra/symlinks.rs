@@ -1,6 +1,6 @@
 use std::path::{Path, PathBuf};
 
-use crate::config::config;
+use crate::infra::config::config;
 
 /// Returns the path of the managed JDK symlink as configured in `symlink_dir`.
 ///

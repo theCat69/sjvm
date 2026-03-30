@@ -2,11 +2,9 @@ use std::fs;
 
 use anyhow::Context;
 
-use crate::{
-    jdk_resolver::detect_jdks,
-    memory::{memory, memory_file},
-    symlinks::{create_symlink, symlink_path},
-};
+use crate::core::jdk_resolver::detect_jdks;
+use crate::infra::memory::{memory, memory_file};
+use crate::infra::symlinks::{create_symlink, symlink_path};
 
 /// Performs first-run setup: creates the initial symlink and resets the memory cache.
 ///

@@ -1,23 +1,15 @@
 #![deny(unsafe_code)]
-mod app_dirs;
-mod config;
-mod jdk_resolver;
-mod jdk_switcher;
-mod list_command;
-mod memory;
-mod setup_command;
-mod symlinks;
-#[cfg(feature = "ui")]
-mod ui_command;
-mod use_command;
+mod commands;
+mod core;
+mod infra;
 
 use clap::{Parser, Subcommand};
-use config::config_path;
-use list_command::list_versions;
-use setup_command::setup;
+use commands::list::list_versions;
+use commands::setup::setup;
 #[cfg(feature = "ui")]
-use ui_command::interactive_select;
-use use_command::{use_version, use_version_local};
+use commands::ui::interactive_select;
+use commands::use_cmd::{use_version, use_version_local};
+use infra::config::config_path;
 
 /// Java version manager via symlinks
 #[derive(Parser)]

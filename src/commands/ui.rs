@@ -10,9 +10,9 @@ use ratatui::{
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-use crate::jdk_switcher::{jdk_display_name, switch_to_jdk};
-use crate::memory::memory;
-use crate::symlinks::symlink_path;
+use crate::core::jdk_switcher::{jdk_display_name, switch_to_jdk};
+use crate::infra::memory::memory;
+use crate::infra::symlinks::symlink_path;
 
 struct App {
     items: Vec<JdkItem>,
