@@ -85,11 +85,74 @@ pub(crate) fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<()>
             .into_owned();
 
         let entry_type = entry.header().entry_type();
+
+        // Symlinks and hardlinks require extra traversal checks on the link target
+        // before we let the `tar` crate unpack them.
         if entry_type.is_symlink() || entry_type == tar::EntryType::Link {
-            bail!(
-                "Archive contains a symlink entry '{}' — symlinks are not permitted for security reasons",
-                entry_path.display()
-            );
+            let link_target = entry
+                .link_name()
+                .context("Link entry has invalid link name")?
+                .context("Link entry has no link name")?
+                .into_owned();
+
+            // For symlinks the target is resolved relative to the symlink's own
+            // directory inside dest_dir.  Compute the canonical destination of the
+            // resolved target and assert it stays under dest_dir.
+            if entry_type.is_symlink() {
+                let symlink_parent = dest_dir.join(
+                    entry_path
+                        .parent()
+                        .unwrap_or_else(|| std::path::Path::new("")),
+                );
+                let resolved = symlink_parent.join(&link_target);
+                // Normalise lexically (no canonicalize — target may not exist yet).
+                let mut components = Vec::new();
+                for component in resolved.components() {
+                    match component {
+                        std::path::Component::ParentDir => {
+                            if components.pop().is_none() {
+                                bail!(
+                                    "Symlink '{}' → '{}' escapes the extraction directory",
+                                    entry_path.display(),
+                                    link_target.display()
+                                );
+                            }
+                        }
+                        std::path::Component::CurDir => {}
+                        c => components.push(c),
+                    }
+                }
+                let normalised: PathBuf = components.iter().collect();
+                if !normalised.starts_with(dest_dir) {
+                    bail!(
+                        "Symlink '{}' → '{}' escapes the extraction directory — aborting to prevent path traversal",
+                        entry_path.display(),
+                        link_target.display()
+                    );
+                }
+            } else {
+                // Hardlinks: the target path is relative to the archive root, i.e.
+                // relative to dest_dir.  Apply the same traversal guard used for
+                // regular file entries.
+                guard_path_traversal(&link_target, dest_dir).with_context(|| {
+                    format!(
+                        "Hardlink target '{}' failed path traversal check",
+                        link_target.display()
+                    )
+                })?;
+            }
+
+            guard_path_traversal(&entry_path, dest_dir)?;
+            let dest_entry = dest_dir.join(&entry_path);
+            if let Some(parent) = dest_entry.parent() {
+                fs::create_dir_all(parent).with_context(|| {
+                    format!("Failed to create parent directory: {}", parent.display())
+                })?;
+            }
+            entry.unpack(&dest_entry).with_context(|| {
+                format!("Failed to unpack link entry to: {}", dest_entry.display())
+            })?;
+            continue;
         }
 
         guard_path_traversal(&entry_path, dest_dir)?;
@@ -568,6 +631,50 @@ mod tests {
         gz.finish().expect("finish gzip");
     }
 
+    /// Builds a minimal `.tar.gz` archive containing a single symlink entry.
+    ///
+    /// `path` is the entry name; `link_target` is the symlink target stored in
+    /// the tar link-name field.  This uses a raw ustar header so we can set the
+    /// typeflag to `'2'` (symlink) directly.
+    fn create_tar_gz_with_symlink(dest: &Path, path: &[u8], link_target: &[u8]) {
+        // ustar header — same layout as `raw_tar_gz_with_entry` but typeflag='2'
+        // and the link-name field (bytes 157-256) holds the symlink target.
+        let mut header = [0u8; 512];
+
+        let name_len = path.len().min(99);
+        header[..name_len].copy_from_slice(&path[..name_len]);
+
+        header[100..108].copy_from_slice(b"0000644\0");
+        header[108..116].copy_from_slice(b"0000000\0");
+        header[116..124].copy_from_slice(b"0000000\0");
+        // size = 0 for symlinks
+        header[124..136].copy_from_slice(b"00000000000\0");
+        header[136..148].copy_from_slice(b"00000000000\0");
+        header[148..156].copy_from_slice(b"        "); // checksum placeholder
+        // typeflag: '2' = symbolic link
+        header[156] = b'2';
+        // link-name field (bytes 157-256)
+        let link_len = link_target.len().min(99);
+        header[157..157 + link_len].copy_from_slice(&link_target[..link_len]);
+        // ustar magic + version
+        header[257..263].copy_from_slice(b"ustar ");
+        header[263..265].copy_from_slice(b" \0");
+
+        let checksum: u32 = header.iter().map(|&b| b as u32).sum();
+        let cksum_str = format!("{checksum:06o}\0 ");
+        header[148..156].copy_from_slice(cksum_str.as_bytes());
+
+        // End-of-archive marker: two 512-byte zero blocks.
+        let mut tar_bytes = Vec::with_capacity(512 + 1024);
+        tar_bytes.extend_from_slice(&header);
+        tar_bytes.extend(std::iter::repeat(0u8).take(1024));
+
+        let file = std::fs::File::create(dest).expect("create archive");
+        let mut gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+        gz.write_all(&tar_bytes).expect("write tar bytes");
+        gz.finish().expect("finish gzip");
+    }
+
     /// Builds a minimal `.zip` archive and writes it to `dest`.
     fn create_zip(dest: &Path, entries: &[(&str, &[u8])]) {
         let file = std::fs::File::create(dest).expect("create zip file");
@@ -699,6 +806,96 @@ mod tests {
             dest.join("jdk-21/release").exists(),
             "release file should exist"
         );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    // --- symlink extraction tests ---
+
+    #[test]
+    fn test_extract_tar_gz_rejects_symlink_that_escapes() {
+        let dir = tmp_dir("tgz_sym_escape");
+        let archive = dir.join("evil_sym.tar.gz");
+        let dest = dir.join("dest");
+        std::fs::create_dir_all(&dest).expect("create dest dir");
+
+        // Symlink inside "jdk-21/sub/" pointing three levels up — the path
+        // "jdk-21/sub/escape" is 3 levels deep inside dest, so "../../../" would
+        // resolve to the *parent* of dest, escaping the extraction directory.
+        create_tar_gz_with_symlink(&archive, b"jdk-21/sub/escape", b"../../../outside");
+
+        let result = extract_tar_gz(&archive, &dest);
+        assert!(
+            result.is_err(),
+            "should reject symlink that escapes dest_dir"
+        );
+        let msg = format!("{}", result.unwrap_err());
+        assert!(
+            msg.contains("escapes"),
+            "expected 'escapes' in error message, got: {msg}"
+        );
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_extract_tar_gz_allows_safe_relative_symlink() {
+        let dir = tmp_dir("tgz_sym_safe");
+        let archive = dir.join("safe_sym.tar.gz");
+        let dest = dir.join("dest");
+        std::fs::create_dir_all(&dest).expect("create dest dir");
+
+        // Build an archive with a real file and a symlink pointing to it within the tree.
+        // jdk-21/a/real.txt  (regular file)
+        // jdk-21/b/link.txt -> ../a/real.txt  (symlink that resolves within dest)
+        //
+        // Use a nested block so that `builder` is dropped (and the underlying
+        // GzEncoder is finished/flushed) before we try to read the archive back.
+        {
+            let file = std::fs::File::create(&archive).expect("create archive");
+            let gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
+            let mut builder = tar::Builder::new(gz);
+
+            // Regular file
+            let content = b"hello";
+            let mut file_header = tar::Header::new_gnu();
+            file_header.set_entry_type(tar::EntryType::Regular);
+            file_header.set_mode(0o644);
+            file_header.set_size(content.len() as u64);
+            file_header.set_cksum();
+            builder
+                .append_data(
+                    &mut file_header,
+                    "jdk-21/a/real.txt",
+                    std::io::Cursor::new(content),
+                )
+                .expect("append regular file");
+
+            // Symlink entry — do NOT pre-set link_name or cksum; append_link
+            // calls prepare_header_path / prepare_header_link / set_cksum
+            // internally and would corrupt any pre-set checksum.
+            let mut sym_header = tar::Header::new_gnu();
+            sym_header.set_entry_type(tar::EntryType::Symlink);
+            sym_header.set_size(0);
+            sym_header.set_mode(0o777);
+            builder
+                .append_link(&mut sym_header, "jdk-21/b/link.txt", "../a/real.txt")
+                .expect("append symlink");
+
+            // into_inner writes the EOF blocks and returns the GzEncoder.
+            // We then call finish() on the encoder so the gzip trailer is
+            // flushed to disk before the block ends.
+            let gz = builder.into_inner().expect("finalise tar builder");
+            gz.finish().expect("finish gzip encoder");
+        } // file is closed here
+
+        extract_tar_gz(&archive, &dest).expect("safe symlink should be allowed");
+
+        // The symlink should exist and point to the right target.
+        let link_path = dest.join("jdk-21/b/link.txt");
+        let target = std::fs::read_link(&link_path).expect("should be a symlink");
+        assert_eq!(target, std::path::Path::new("../a/real.txt"));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
