@@ -38,7 +38,7 @@ rust-mcp-server_cargo-test                        # Run all unit tests
 rust-mcp-server_cargo-test --testname test_name   # Run specific test
 ```
 
-Unit tests are in `#[cfg(test)]` modules within source files (e.g., `src/commands/ui.rs`).
+Unit tests are in `#[cfg(test)]` modules within source files (e.g., `src/commands/ui/install_screen.rs`).
 
 ### E2E Tests (Special Task - Separate Workflow)
 
@@ -59,19 +59,28 @@ src/
 ├── main.rs           # CLI entry (clap Parser/Subcommand)
 ├── core/
 │   ├── mod.rs
+│   ├── jdk_catalog.rs    # Vendor API integration (Adoptium, GraalVM CE)
+│   ├── downloader.rs     # Streaming download, SHA-256 verify, extract, install
 │   ├── jdk_resolver.rs   # JDK discovery
 │   └── jdk_switcher.rs   # JDK version lookup and symlink switching
 ├── infra/
 │   ├── mod.rs
 │   ├── app_dirs.rs       # Platform directories
 │   ├── config.rs         # JSON config with OnceLock singleton
+│   ├── http.rs           # reqwest blocking client (rustls-tls)
 │   ├── memory.rs         # Binary cache (bincode)
 │   └── symlinks.rs       # Cross-platform symlink ops
 └── commands/
     ├── mod.rs
+    ├── delete.rs         # Removes an installed JDK (with confirmation)
+    ├── install.rs        # Downloads and installs a JDK
     ├── list.rs           # Lists known JDKs
     ├── setup.rs          # First-run setup
-    ├── ui.rs             # Interactive TUI (ratatui, feature-gated)
+    ├── versions.rs       # Lists available versions from vendor APIs
+    ├── ui/               # Interactive TUI (ratatui, feature-gated)
+    │   ├── mod.rs        # Screen enum, tab bar, event loop
+    │   ├── switch_screen.rs  # JDK switcher screen
+    │   └── install_screen.rs # JDK install screen with inline progress
     └── use_cmd.rs        # Switches JDK globally or locally
 tests/e2e.rs              # Integration tests (Docker-only)
 ```

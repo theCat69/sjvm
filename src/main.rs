@@ -52,6 +52,18 @@ enum Commands {
         #[arg(long)]
         force: bool,
     },
+    /// Remove an installed JDK (prompts for confirmation)
+    Delete {
+        /// Name of the JDK directory to remove
+        #[arg(value_name = "NAME", value_parser = validate_delete_name)]
+        name: String,
+    },
+    /// List available JDK versions from vendor APIs
+    Versions {
+        /// JDK distribution vendor (shows both if omitted)
+        #[arg(long, value_enum)]
+        vendor: Option<core::jdk_catalog::Vendor>,
+    },
     #[cfg(feature = "ui")]
     /// Interactive TUI for selecting a JDK
     Ui,
@@ -82,6 +94,10 @@ fn validate_version(s: &str) -> Result<String, String> {
         );
     }
     Ok(s.to_owned())
+}
+
+fn validate_delete_name(s: &str) -> Result<String, String> {
+    commands::delete::validate_delete_name(s)
 }
 
 #[cfg(test)]
@@ -189,6 +205,54 @@ mod tests {
         let result = Cli::try_parse_from(["sjvm", "install", "7"]);
         assert!(result.is_err(), "version 7 should be rejected");
     }
+
+    #[test]
+    fn test_delete_command_parses() {
+        let cli = Cli::try_parse_from(["sjvm", "delete", "jdk-21"]).expect("should parse");
+        if let Commands::Delete { name } = cli.command {
+            assert_eq!(name, "jdk-21");
+        } else {
+            panic!("expected Commands::Delete");
+        }
+    }
+
+    #[test]
+    fn test_delete_command_rejects_path_traversal() {
+        let result = Cli::try_parse_from(["sjvm", "delete", "../etc"]);
+        assert!(result.is_err(), "path traversal should be rejected");
+    }
+
+    #[test]
+    fn test_versions_command_parses_no_vendor() {
+        let cli = Cli::try_parse_from(["sjvm", "versions"]).expect("should parse");
+        if let Commands::Versions { vendor } = cli.command {
+            assert!(vendor.is_none());
+        } else {
+            panic!("expected Commands::Versions");
+        }
+    }
+
+    #[test]
+    fn test_versions_command_parses_openjdk_vendor() {
+        let cli =
+            Cli::try_parse_from(["sjvm", "versions", "--vendor", "openjdk"]).expect("should parse");
+        if let Commands::Versions { vendor } = cli.command {
+            assert_eq!(vendor, Some(crate::core::jdk_catalog::Vendor::OpenJdk));
+        } else {
+            panic!("expected Commands::Versions");
+        }
+    }
+
+    #[test]
+    fn test_versions_command_parses_graalvm_vendor() {
+        let cli =
+            Cli::try_parse_from(["sjvm", "versions", "--vendor", "graalvm"]).expect("should parse");
+        if let Commands::Versions { vendor } = cli.command {
+            assert_eq!(vendor, Some(crate::core::jdk_catalog::Vendor::GraalVm));
+        } else {
+            panic!("expected Commands::Versions");
+        }
+    }
 }
 
 fn main() {
@@ -233,6 +297,18 @@ fn main() {
                 force,
             ) {
                 eprintln!("❌ Install failed: {e}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Delete { name } => {
+            if let Err(e) = commands::delete::run_delete(&name) {
+                eprintln!("❌ Delete failed: {e}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Versions { vendor } => {
+            if let Err(e) = commands::versions::run_versions(vendor.as_ref()) {
+                eprintln!("❌ Versions failed: {e}");
                 std::process::exit(1);
             }
         }

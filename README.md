@@ -145,9 +145,82 @@ Show configuration path:
 sjvm config path
 ```
 
+### Install
+
+Download, verify, and install a JDK directly from Adoptium (Temurin) or GraalVM CE:
+
+```sh
+# Install the latest Temurin JDK 21 for the current platform
+sjvm install 21
+
+# Install GraalVM CE 17
+sjvm install 17 --vendor graalvm
+
+# Overwrite an existing installation
+sjvm install 21 --force
+```
+
+After a successful install, sjvm prompts you to switch to the new JDK immediately:
+
+```
+✅ Installed temurin-21-amd64 → /usr/lib/jvm/temurin-21-amd64
+
+Switch to the newly installed JDK now? [y/N]
+```
+
+**Options:**
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--vendor <VENDOR>` | `openjdk` (Adoptium Temurin) or `graalvm` | `openjdk` |
+| `--os <OS>` | Target OS override (`linux`, `mac`, `windows`) | auto-detected |
+| `--arch <ARCH>` | Target architecture override (`x64`, `aarch64`) | auto-detected |
+| `--force` | Re-download and overwrite if already installed | off |
+
+Supported major versions: **8–25**.
+
+### Delete
+
+Remove an installed JDK directory (prompts for confirmation):
+
+```sh
+sjvm delete jdk-21
+```
+
+Example output:
+
+```
+Are you sure you want to delete "jdk-21"? [y/N] y
+✓ Deleted jdk-21
+```
+
+The name must be a plain directory name — no path separators or `..` components. The JDK must exist inside the first configured `jdks_dirs`.
+
+### Versions
+
+List available JDK versions from vendor APIs (requires a network connection):
+
+```sh
+# Show versions from all vendors
+sjvm versions
+
+# Show only OpenJDK (Adoptium) versions
+sjvm versions --vendor openjdk
+
+# Show only GraalVM CE versions
+sjvm versions --vendor graalvm
+```
+
+Example output:
+
+```
+OpenJDK (Adoptium): 8, 11, 17, 21, 22, 23
+GraalVM CE: 17, 20, 21
+```
+
 ### UI (Interactive Mode)
 
-`sjvm` includes an optional interactive TUI for browsing and switching JDKs:
+`sjvm` includes an optional interactive TUI for browsing and switching JDKs, and for installing new ones:
 
 ```sh
 sjvm ui
@@ -155,14 +228,37 @@ sjvm ui
 
 > **Note:** The `ui` subcommand requires building with `--features ui` (see Feature Flags below).
 
-**Keybindings:**
+The TUI has two screens navigable via the **Tab** key (or `s`/`i` shortcuts):
+
+**Switch screen** — browse and activate installed JDKs:
 
 | Key | Action |
 |-----|--------|
 | `↑` / `k` | Move selection up |
 | `↓` / `j` | Move selection down |
 | `Enter` | Switch to the selected JDK |
-| `q` / `Esc` | Quit without switching |
+| `d` | Delete the selected JDK (confirmation overlay) |
+| `q` / `Esc` | Quit |
+
+**Install screen** — pick a vendor and version, then download and install inline:
+
+| Key | Action |
+|-----|--------|
+| `↑` / `k` | Move selection up |
+| `↓` / `j` | Move selection down |
+| `Enter` | Confirm selection / start download |
+| `Ctrl+C` | Go back one step |
+
+The install screen opens directly at the **vendor picker** (OpenJDK or GraalVM CE). After selecting a vendor, sjvm fetches the available versions (8–25) from the vendor API and presents them as a scrollable list. Once a version is confirmed, download progress is shown inline as a human-readable gauge (`50.0 MB / 195.3 MB`). On success, press `y` to switch immediately or `n` / `Ctrl+C` to return.
+
+**Global TUI keybindings (any screen):**
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Toggle between Switch and Install screens |
+| `s` | Jump to Switch screen |
+| `i` | Jump to Install screen |
+| `q` / `Esc` | Quit |
 
 ## Development
 
@@ -251,9 +347,19 @@ The Docker setup includes:
 - **Configuration** (`infra/config.rs`) — JSON-based configuration management with cross-platform directories
 - **JDK Resolution** (`core/jdk_resolver.rs`) — Automatic JDK discovery and version detection
 - **JDK Switching** (`core/jdk_switcher.rs`) — Version matching and symlink switch operations
+- **JDK Catalog** (`core/jdk_catalog.rs`) — Vendor API integration (Adoptium and GraalVM CE); resolves download URLs and checksums
+- **Downloader** (`core/downloader.rs`) — Streaming download, SHA-256 verification, archive extraction, and installation pipeline
+- **HTTP Client** (`infra/http.rs`) — `reqwest` blocking client with `rustls-tls`; centralises TLS config and `User-Agent`
 - **Symlink Management** (`infra/symlinks.rs`) — Cross-platform symlink operations
 - **Memory Management** (`infra/memory.rs`) — Binary cache (bincode) storing current JDK state
-- **Commands** — Individual CLI command implementations (`commands/setup.rs`, `commands/use_cmd.rs`, `commands/list.rs`)
+- **Commands** — Individual CLI command implementations:
+  - `commands/setup.rs` — First-run setup
+  - `commands/use_cmd.rs` — Switch JDK globally or locally
+  - `commands/list.rs` — List installed JDKs
+  - `commands/install.rs` — Download and install a JDK
+  - `commands/delete.rs` — Remove an installed JDK
+  - `commands/versions.rs` — List available versions from vendor APIs
+  - `commands/ui/` — Interactive TUI (feature-gated): `mod.rs` (screen enum, event loop), `switch_screen.rs`, `install_screen.rs`
 
 ### Configuration
 

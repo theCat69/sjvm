@@ -3,6 +3,8 @@
 //! Pure parse functions are separated from HTTP calls so that unit tests never need
 //! a live network connection.
 
+use std::collections::HashSet;
+
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
@@ -246,7 +248,7 @@ fn resolve_adoptium(version: u16, os: &str, arch: &str) -> Result<ArtifactInfo> 
         "https://api.adoptium.net/v3/assets/latest/{version}/hotspot\
          ?os={os}&architecture={arch}&image_type=jdk&jvm_impl=hotspot&vendor=eclipse"
     );
-    debug_assert!(url.starts_with("https://"), "Adoptium URL must be HTTPS");
+    assert!(url.starts_with("https://"), "Adoptium URL must be HTTPS");
 
     let json = crate::infra::http::get_json(&url)
         .with_context(|| format!("Failed to fetch Adoptium API for JDK {version}"))?;
@@ -273,7 +275,7 @@ fn resolve_graalvm(version: u16, os: &str, arch: &str) -> Result<ArtifactInfo> {
         } else {
             format!("{BASE_URL}&page={page}")
         };
-        debug_assert!(url.starts_with("https://"), "GraalVM URL must be HTTPS");
+        assert!(url.starts_with("https://"), "GraalVM URL must be HTTPS");
 
         let json = crate::infra::http::get_json(&url)
             .with_context(|| format!("Failed to fetch GraalVM releases page {page}"))?;
@@ -301,6 +303,102 @@ fn resolve_graalvm(version: u16, os: &str, arch: &str) -> Result<ArtifactInfo> {
     }
 
     bail!("No GraalVM CE release found for JDK {version}");
+}
+
+// ---------------------------------------------------------------------------
+// Available versions fetcher
+// ---------------------------------------------------------------------------
+
+/// Parses the Adoptium `available_releases` JSON into a sorted `Vec<u16>` of major
+/// versions in the range `8..=25`.
+pub(crate) fn parse_adoptium_available_releases(json: &Value) -> Vec<u16> {
+    let Some(arr) = json["available_releases"].as_array() else {
+        return Vec::new();
+    };
+    let mut versions: Vec<u16> = arr
+        .iter()
+        .filter_map(|v| v.as_u64().and_then(|n| u16::try_from(n).ok()))
+        .filter(|n| (8..=25).contains(n))
+        .collect();
+    versions.sort_unstable();
+    versions.dedup();
+    versions
+}
+
+/// Parses a page of GraalVM GitHub Releases JSON and inserts matching major
+/// versions (those whose `tag_name` starts with `"jdk-"`) into `set`.
+/// Returns `true` if the page was non-empty.
+pub(crate) fn parse_graalvm_release_tags(json: &Value, set: &mut HashSet<u16>) -> bool {
+    let Some(releases) = json.as_array() else {
+        return false;
+    };
+    if releases.is_empty() {
+        return false;
+    }
+    for release in releases {
+        if let Some(tag) = release["tag_name"].as_str()
+            && let Some(rest) = tag.strip_prefix("jdk-")
+        {
+            let leading: String = rest.chars().take_while(|c| c.is_ascii_digit()).collect();
+            if !leading.is_empty()
+                && let Ok(major) = leading.parse::<u16>()
+                && (8..=25).contains(&major)
+            {
+                set.insert(major);
+            }
+        }
+    }
+    true
+}
+
+/// Fetches the list of available JDK major versions for the given vendor.
+///
+/// Makes real HTTP calls; should not be called in unit tests. Parses responses
+/// using the pure helpers [`parse_adoptium_available_releases`] and
+/// [`parse_graalvm_release_tags`].
+pub(crate) fn fetch_available_versions(vendor: &Vendor) -> Result<Vec<u16>> {
+    match vendor {
+        Vendor::OpenJdk => fetch_adoptium_versions(),
+        Vendor::GraalVm => fetch_graalvm_versions(),
+    }
+}
+
+fn fetch_adoptium_versions() -> Result<Vec<u16>> {
+    let url = "https://api.adoptium.net/v3/info/available_releases";
+    assert!(url.starts_with("https://"), "Adoptium URL must be HTTPS");
+    let json =
+        crate::infra::http::get_json(url).context("Failed to fetch Adoptium available releases")?;
+    let versions = parse_adoptium_available_releases(&json);
+    Ok(versions)
+}
+
+fn fetch_graalvm_versions() -> Result<Vec<u16>> {
+    const BASE_URL: &str =
+        "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases?per_page=100";
+    const MAX_PAGES: u32 = 5;
+
+    let mut set: HashSet<u16> = HashSet::new();
+
+    for page in 1..=MAX_PAGES {
+        let url = if page == 1 {
+            BASE_URL.to_owned()
+        } else {
+            format!("{BASE_URL}&page={page}")
+        };
+        assert!(url.starts_with("https://"), "GraalVM URL must be HTTPS");
+
+        let json = crate::infra::http::get_json(&url)
+            .with_context(|| format!("Failed to fetch GraalVM releases page {page}"))?;
+
+        let non_empty = parse_graalvm_release_tags(&json, &mut set);
+        if !non_empty {
+            break;
+        }
+    }
+
+    let mut versions: Vec<u16> = set.into_iter().collect();
+    versions.sort_unstable();
+    Ok(versions)
 }
 
 // ---------------------------------------------------------------------------
@@ -538,5 +636,81 @@ mod tests {
             !err_msg.contains("non-HTTPS"),
             "HTTPS URL should not be rejected by scheme check, got: {err_msg}"
         );
+    }
+
+    // --- fetch_available_versions parse helpers ---
+
+    #[test]
+    fn test_fetch_available_versions_openjdk_parses_json() {
+        let json = serde_json::json!({
+            "available_releases": [8, 11, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+        });
+        let versions = parse_adoptium_available_releases(&json);
+        // 26 is out of range (>25), so it should be excluded
+        assert_eq!(
+            versions,
+            vec![8, 11, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25]
+        );
+    }
+
+    #[test]
+    fn test_fetch_available_versions_openjdk_empty_array() {
+        let json = serde_json::json!({ "available_releases": [] });
+        let versions = parse_adoptium_available_releases(&json);
+        assert!(versions.is_empty());
+    }
+
+    #[test]
+    fn test_fetch_available_versions_openjdk_filters_below_8() {
+        let json = serde_json::json!({ "available_releases": [6, 7, 8, 11] });
+        let versions = parse_adoptium_available_releases(&json);
+        assert_eq!(versions, vec![8, 11]);
+    }
+
+    #[test]
+    fn test_fetch_available_versions_openjdk_missing_field() {
+        let json = serde_json::json!({});
+        let versions = parse_adoptium_available_releases(&json);
+        assert!(versions.is_empty());
+    }
+
+    #[test]
+    fn test_fetch_available_versions_graalvm_scans_tags() {
+        let json = serde_json::json!([
+            { "tag_name": "jdk-17.0.9", "assets": [] },
+            { "tag_name": "jdk-21.0.5", "assets": [] },
+            { "tag_name": "vm-24.0.0", "assets": [] },    // not jdk-
+            { "tag_name": "jdk-8.0.392", "assets": [] },
+            { "tag_name": "jdk-26.0.0", "assets": [] },   // out of range
+        ]);
+        let mut set = std::collections::HashSet::new();
+        let non_empty = parse_graalvm_release_tags(&json, &mut set);
+        assert!(non_empty);
+        let mut versions: Vec<u16> = set.into_iter().collect();
+        versions.sort_unstable();
+        assert_eq!(versions, vec![8, 17, 21]);
+    }
+
+    #[test]
+    fn test_fetch_available_versions_graalvm_empty_page() {
+        let json = serde_json::json!([]);
+        let mut set = std::collections::HashSet::new();
+        let non_empty = parse_graalvm_release_tags(&json, &mut set);
+        assert!(!non_empty);
+        assert!(set.is_empty());
+    }
+
+    #[test]
+    fn test_fetch_available_versions_graalvm_deduplicates() {
+        let json = serde_json::json!([
+            { "tag_name": "jdk-21.0.5", "assets": [] },
+            { "tag_name": "jdk-21.0.4", "assets": [] },
+            { "tag_name": "jdk-17.0.1", "assets": [] },
+        ]);
+        let mut set = std::collections::HashSet::new();
+        parse_graalvm_release_tags(&json, &mut set);
+        let mut versions: Vec<u16> = set.into_iter().collect();
+        versions.sort_unstable();
+        assert_eq!(versions, vec![17, 21]);
     }
 }

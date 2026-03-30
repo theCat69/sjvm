@@ -4,10 +4,10 @@ use std::time::{Duration, Instant};
 use anyhow::Context;
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::Line,
-    widgets::{Block, Borders, List, ListItem, ListState, Paragraph},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph},
 };
 
 use crate::core::jdk_switcher::{jdk_display_name, switch_to_jdk};
@@ -21,10 +21,12 @@ pub(crate) struct SwitchState {
     pub(super) current_jdk: Option<PathBuf>,
     pub(super) success_message: Option<String>,
     pub(super) success_shown_at: Option<Instant>,
+    /// When `Some(name)`, the UI shows a delete-confirmation overlay.
+    pub(super) delete_confirm: Option<String>,
 }
 
 #[derive(Clone)]
-pub(super) struct JdkItem {
+pub(crate) struct JdkItem {
     pub(super) path: PathBuf,
     pub(super) display_name: String,
     pub(super) is_current: bool,
@@ -70,6 +72,7 @@ impl SwitchState {
             current_jdk,
             success_message: None,
             success_shown_at: None,
+            delete_confirm: None,
         })
     }
 
@@ -109,7 +112,7 @@ impl SwitchState {
         self.selected_index = Some(i);
     }
 
-    fn selected_jdk(&self) -> Option<&JdkItem> {
+    pub(crate) fn selected_jdk(&self) -> Option<&JdkItem> {
         self.selected_index.and_then(|i| self.items.get(i))
     }
 
@@ -162,7 +165,7 @@ pub(crate) fn render_switch_screen(
     // Render status bar (styled like Help section)
     let status_content = if let Some(ref message) = state.success_message {
         Line::from(vec![
-            ratatui::text::Span::styled("✓ ", Style::default().fg(Color::Green)),
+            ratatui::text::Span::styled("\u{2713} ", Style::default().fg(Color::Green)),
             ratatui::text::Span::raw(message),
         ])
     } else {
@@ -180,7 +183,7 @@ pub(crate) fn render_switch_screen(
         .items
         .iter()
         .map(|item| {
-            let prefix = if item.is_current { "→ " } else { "  " };
+            let prefix = if item.is_current { "\u{2192} " } else { "  " };
             let line = Line::from(format!("{} {}", prefix, item.display_name));
             ListItem::new(line)
         })
@@ -203,12 +206,45 @@ pub(crate) fn render_switch_screen(
     f.render_stateful_widget(list, chunks[1], &mut state.list_state);
 
     let help_text = vec![Line::from(
-        "↑/k: Up   ↓/j: Down   Enter: Select   q/Esc: Quit",
+        "\u{2191}/k: Up   \u{2193}/j: Down   Enter: Select   d: Delete   q/Esc: Quit",
     )];
 
     let help =
         Paragraph::new(help_text).block(Block::default().borders(Borders::ALL).title("Help"));
     f.render_widget(help, chunks[2]);
+
+    // Render delete-confirmation overlay if active
+    if let Some(ref name) = state.delete_confirm.clone() {
+        render_delete_overlay(f, area, name);
+    }
+}
+
+/// Renders a centered confirmation overlay for the delete action.
+fn render_delete_overlay(f: &mut Frame, area: Rect, name: &str) {
+    let overlay_width = 50u16.min(area.width.saturating_sub(4));
+    let overlay_height = 3u16;
+    let x = area.x + area.width.saturating_sub(overlay_width) / 2;
+    let y = area.y + area.height.saturating_sub(overlay_height) / 2;
+
+    let overlay_area = Rect {
+        x,
+        y,
+        width: overlay_width,
+        height: overlay_height,
+    };
+
+    f.render_widget(Clear, overlay_area);
+
+    let text = format!("Delete \"{name}\"?  [y] Yes   [n] Cancel");
+    let overlay = Paragraph::new(Line::from(text))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Red))
+                .title("Confirm Delete"),
+        )
+        .style(Style::default().fg(Color::White));
+    f.render_widget(overlay, overlay_area);
 }
 
 #[cfg(test)]
@@ -244,6 +280,7 @@ mod tests {
             current_jdk: Some(PathBuf::from("/test/jdk-11")),
             success_message: None,
             success_shown_at: None,
+            delete_confirm: None,
         }
     }
 
@@ -348,10 +385,10 @@ mod tests {
         // Verify that current indicator (→) is rendered for jdk-11
         let current_indicator_found = content
             .iter()
-            .any(|cell: &ratatui::buffer::Cell| cell.symbol().contains("→"));
+            .any(|cell: &ratatui::buffer::Cell| cell.symbol().contains("\u{2192}"));
         assert!(
             current_indicator_found,
-            "Current JDK indicator (→) should be rendered"
+            "Current JDK indicator (\u{2192}) should be rendered"
         );
     }
 
@@ -364,6 +401,7 @@ mod tests {
             current_jdk: None,
             success_message: None,
             success_shown_at: None,
+            delete_confirm: None,
         };
         // Neither next() nor previous() should panic on an empty list
         app.next();
@@ -389,5 +427,17 @@ mod tests {
         app.next();
         let selected = app.selected_jdk();
         assert_eq!(selected.unwrap().display_name, "jdk-21");
+    }
+
+    #[test]
+    fn test_delete_confirm_overlay_renders() {
+        let mut app = create_test_app();
+        app.delete_confirm = Some("jdk-17".to_owned());
+
+        let backend = TestBackend::new(80, 24);
+        let mut terminal = Terminal::new(backend).unwrap();
+
+        let result = terminal.draw(|f| render_switch_screen(f, &mut app, f.area()));
+        assert!(result.is_ok(), "delete overlay rendering should not fail");
     }
 }
