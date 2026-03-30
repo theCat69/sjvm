@@ -28,7 +28,6 @@ pub(crate) enum InstallState {
         selected: usize,
     },
     /// Resolving artifact metadata for the chosen vendor + version.
-    #[allow(dead_code)]
     FetchingArtifact { vendor: Vendor, version: u16 },
     /// Artifact metadata is ready; user confirms download.
     ArtifactReady { artifact: ArtifactInfo },

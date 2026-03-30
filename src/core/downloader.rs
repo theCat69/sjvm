@@ -22,7 +22,6 @@ use crate::core::jdk_switcher::vendor_to_str;
 // ---------------------------------------------------------------------------
 
 /// Describes a single JDK installation request.
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) struct InstallRequest {
     /// Resolved artifact metadata (URL, checksum, filename, …).
     pub(crate) artifact: ArtifactInfo,
@@ -39,7 +38,6 @@ pub(crate) struct InstallRequest {
 /// Verifies that the SHA-256 digest of `file_path` matches `expected_hex`.
 ///
 /// `expected_hex` must be exactly 64 lowercase or uppercase hexadecimal characters.
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) fn verify_checksum(file_path: &Path, expected_hex: &str) -> Result<()> {
     if expected_hex.len() != 64 || !expected_hex.chars().all(|c| c.is_ascii_hexdigit()) {
         bail!("not a valid SHA-256 hex string: '{expected_hex}'");
@@ -68,7 +66,6 @@ pub(crate) fn verify_checksum(file_path: &Path, expected_hex: &str) -> Result<()
 }
 
 /// Extracts a `.tar.gz` archive into `dest_dir`, guarding against path traversal.
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<()> {
     let file = fs::File::open(archive_path)
         .with_context(|| format!("Failed to open archive: {}", archive_path.display()))?;
@@ -177,7 +174,6 @@ pub(crate) fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<()>
 }
 
 /// Extracts a `.zip` archive into `dest_dir`, guarding against path traversal.
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<()> {
     let file = fs::File::open(archive_path)
         .with_context(|| format!("Failed to open zip archive: {}", archive_path.display()))?;
@@ -234,7 +230,6 @@ pub(crate) fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<()> {
 /// Returns the single top-level subdirectory inside `dir`.
 ///
 /// Errors if the directory is empty or contains more than one entry.
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) fn identify_top_level_dir(dir: &Path) -> Result<PathBuf> {
     let mut entries: Vec<PathBuf> = fs::read_dir(dir)
         .with_context(|| format!("Failed to read directory: {}", dir.display()))?
@@ -275,7 +270,6 @@ pub(crate) fn identify_top_level_dir(dir: &Path) -> Result<PathBuf> {
 ///
 /// 1. `dest.parent()` resolves to exactly `canonical_jdks` (one level deep, no subdirs).
 /// 2. `dest.file_name()` contains no path separators (`/` or `\`).
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) fn validate_dest_within_jdks_dir(dest: &Path, jdks_dir: &Path) -> Result<()> {
     // Canonicalize the jdks_dir — bail if it does not exist or is inaccessible.
     let canonical_jdks = jdks_dir.canonicalize().with_context(|| {
@@ -381,7 +375,6 @@ fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
 ///
 /// `on_progress(bytes_downloaded, total)` is called after each download chunk.
 /// Returns the path to the installed JDK directory on success.
-#[allow(dead_code)] // removed in Phase 3 when install command calls this
 pub(crate) fn install_jdk(
     request: InstallRequest,
     on_progress: impl Fn(u64, Option<u64>),
