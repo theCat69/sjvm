@@ -616,7 +616,7 @@ fn test_ui_install_navigation() {
         thread::sleep(Duration::from_millis(100));
     }
     let _ = child.wait(); // reap in all cases (no-op if already exited)
-                          // Test passes if we reach this point: TUI opened, navigation worked, exited cleanly
+    // Test passes if we reach this point: TUI opened, navigation worked, exited cleanly
 }
 
 #[test]
