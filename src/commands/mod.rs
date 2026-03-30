@@ -2,6 +2,7 @@ pub(crate) mod delete;
 pub(crate) mod install;
 pub(crate) mod list;
 pub(crate) mod setup;
+pub(crate) mod tag;
 #[cfg(feature = "ui")]
 pub(crate) mod ui;
 pub(crate) mod use_cmd;

@@ -31,6 +31,9 @@ enum Commands {
         /// Print shell export commands instead of switching globally
         #[arg(short, long)]
         local: bool,
+        /// Restrict to a specific vendor (skips custom JDKs with wrong vendor tag)
+        #[arg(long, value_enum)]
+        vendor: Option<core::jdk_catalog::Vendor>,
     },
     /// List available JDKs
     List,
@@ -63,6 +66,18 @@ enum Commands {
         /// JDK distribution vendor (shows both if omitted)
         #[arg(long, value_enum)]
         vendor: Option<core::jdk_catalog::Vendor>,
+    },
+    /// Tag an existing JDK with a vendor label
+    Tag {
+        /// Name of the JDK directory to tag
+        #[arg(value_name = "NAME", value_parser = validate_delete_name)]
+        name: String,
+        /// Vendor to assign
+        #[arg(long, value_enum)]
+        vendor: core::jdk_catalog::Vendor,
+        /// Overwrite existing vendor tag
+        #[arg(long)]
+        force: bool,
     },
     #[cfg(feature = "ui")]
     /// Interactive TUI for selecting a JDK
@@ -253,6 +268,50 @@ mod tests {
             panic!("expected Commands::Versions");
         }
     }
+
+    #[test]
+    fn test_use_command_parses_vendor() {
+        let cli = Cli::try_parse_from(["sjvm", "use", "17", "--vendor", "graalvm"])
+            .expect("should parse");
+        if let Commands::Use {
+            version, vendor, ..
+        } = cli.command
+        {
+            assert_eq!(version, "17");
+            assert_eq!(vendor, Some(crate::core::jdk_catalog::Vendor::GraalVm));
+        } else {
+            panic!("expected Commands::Use");
+        }
+    }
+
+    #[test]
+    fn test_tag_command_parses() {
+        let cli = Cli::try_parse_from(["sjvm", "tag", "jdk-17", "--vendor", "openjdk"])
+            .expect("should parse");
+        if let Commands::Tag {
+            name,
+            vendor,
+            force,
+        } = cli.command
+        {
+            assert_eq!(name, "jdk-17");
+            assert_eq!(vendor, crate::core::jdk_catalog::Vendor::OpenJdk);
+            assert!(!force);
+        } else {
+            panic!("expected Commands::Tag");
+        }
+    }
+
+    #[test]
+    fn test_tag_command_parses_force() {
+        let cli = Cli::try_parse_from(["sjvm", "tag", "jdk-17", "--vendor", "openjdk", "--force"])
+            .expect("should parse");
+        if let Commands::Tag { force, .. } = cli.command {
+            assert!(force);
+        } else {
+            panic!("expected Commands::Tag");
+        }
+    }
 }
 
 fn main() {
@@ -265,11 +324,15 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        Commands::Use { version, local } => {
+        Commands::Use {
+            version,
+            local,
+            vendor,
+        } => {
             let result = if local {
-                use_version_local(&version)
+                use_version_local(&version, vendor.as_ref())
             } else {
-                use_version(&version)
+                use_version(&version, vendor.as_ref())
             };
             if let Err(e) = result {
                 eprintln!("❌ {e}");
@@ -309,6 +372,16 @@ fn main() {
         Commands::Versions { vendor } => {
             if let Err(e) = commands::versions::run_versions(vendor.as_ref()) {
                 eprintln!("❌ Versions failed: {e}");
+                std::process::exit(1);
+            }
+        }
+        Commands::Tag {
+            name,
+            vendor,
+            force,
+        } => {
+            if let Err(e) = commands::tag::run_tag(&name, &vendor, force) {
+                eprintln!("❌ Tag failed: {e}");
                 std::process::exit(1);
             }
         }

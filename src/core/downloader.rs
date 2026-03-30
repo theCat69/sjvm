@@ -15,6 +15,7 @@ use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 
 use crate::core::jdk_catalog::ArtifactInfo;
+use crate::core::jdk_switcher::vendor_to_str;
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -509,6 +510,14 @@ pub(crate) fn install_jdk(
         let marker_path = final_dest.join(".sjvm-managed");
         if let Err(e) = std::fs::write(&marker_path, b"") {
             eprintln!("Warning: could not write .sjvm-managed marker: {e}");
+        }
+
+        // Step 8b — write the `.sjvm-vendor` marker file containing the lowercase
+        // vendor name so that `sjvm use --vendor` can filter by distribution.
+        let vendor_name = vendor_to_str(&request.artifact.vendor);
+        let vendor_path = final_dest.join(".sjvm-vendor");
+        if let Err(e) = std::fs::write(&vendor_path, vendor_name) {
+            eprintln!("Warning: could not write .sjvm-vendor marker: {e}");
         }
 
         // Step 9 — invalidate the in-process JDK discovery cache.

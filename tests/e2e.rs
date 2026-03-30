@@ -683,3 +683,139 @@ fn test_ui_delete() {
         "JDK '{jdk_name}' should be gone from list after TUI delete, but list is: {list:?}"
     );
 }
+
+/// Returns the configured JDKs directory — hardcoded to `/opt/jdks` for the
+/// Docker test environment, which is what the sjvm config is set to in the
+/// Docker Compose setup.
+fn jdks_dir() -> std::path::PathBuf {
+    std::path::PathBuf::from("/opt/jdks")
+}
+
+#[test]
+#[ignore]
+fn test_use_vendor_filter_success() {
+    let jdk_name = install_jdk_for_test(21, "openjdk");
+
+    let output = sjvm_command()
+        .args(["use", "21", "--vendor", "openjdk"])
+        .output()
+        .expect("Failed to run sjvm use 21 --vendor openjdk");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "Expected exit 0 for 'use 21 --vendor openjdk', stderr: {stderr}, stdout: {stdout}"
+    );
+    assert!(
+        stdout.contains('✅'),
+        "Expected '✅' in stdout, got: {stdout}"
+    );
+
+    // Cleanup: not strictly necessary but keeps the environment tidy.
+    let _ = jdk_name;
+}
+
+#[test]
+#[ignore]
+fn test_use_vendor_no_match_error() {
+    let output = sjvm_command()
+        .args(["use", "999", "--vendor", "graalvm"])
+        .output()
+        .expect("Failed to run sjvm use 999 --vendor graalvm");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit for nonexistent version with vendor filter"
+    );
+    assert!(
+        stderr.contains("not found"),
+        "Expected 'not found' in stderr, got: {stderr}"
+    );
+    assert!(
+        stderr.contains("sjvm install"),
+        "Expected install hint in stderr, got: {stderr}"
+    );
+}
+
+#[test]
+#[ignore]
+fn test_tag_writes_vendor_file() {
+    let jdk_name = install_jdk_for_test(21, "openjdk");
+    let vendor_file = jdks_dir().join(&jdk_name).join(".sjvm-vendor");
+
+    // Remove the vendor file that was written during install so we can test `sjvm tag`.
+    let _ = std::fs::remove_file(&vendor_file);
+    assert!(
+        !vendor_file.exists(),
+        ".sjvm-vendor should be absent before tagging"
+    );
+
+    let output = sjvm_command()
+        .args(["tag", &jdk_name, "--vendor", "openjdk"])
+        .output()
+        .expect("Failed to run sjvm tag");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "Expected exit 0 for sjvm tag, stderr: {stderr}"
+    );
+    assert!(
+        stdout.contains('✅'),
+        "Expected '✅' in stdout, got: {stdout}"
+    );
+    assert!(
+        vendor_file.exists(),
+        ".sjvm-vendor should exist after tagging"
+    );
+    let content = std::fs::read_to_string(&vendor_file).expect("read .sjvm-vendor");
+    assert_eq!(content.trim(), "openjdk");
+}
+
+#[test]
+#[ignore]
+fn test_tag_already_tagged_no_force() {
+    // Install writes .sjvm-vendor automatically.
+    let jdk_name = install_jdk_for_test(21, "openjdk");
+
+    let output = sjvm_command()
+        .args(["tag", &jdk_name, "--vendor", "openjdk"])
+        .output()
+        .expect("Failed to run sjvm tag without --force");
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit when JDK is already tagged and --force is absent"
+    );
+    assert!(
+        stderr.contains("already tagged"),
+        "Expected 'already tagged' in stderr, got: {stderr}"
+    );
+}
+
+#[test]
+#[ignore]
+fn test_tag_already_tagged_with_force() {
+    // Install writes .sjvm-vendor automatically.
+    let jdk_name = install_jdk_for_test(21, "openjdk");
+
+    let output = sjvm_command()
+        .args(["tag", &jdk_name, "--vendor", "openjdk", "--force"])
+        .output()
+        .expect("Failed to run sjvm tag --force");
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "Expected exit 0 for sjvm tag --force, stderr: {stderr}"
+    );
+    assert!(
+        stdout.contains('✅'),
+        "Expected '✅' in stdout, got: {stdout}"
+    );
+}

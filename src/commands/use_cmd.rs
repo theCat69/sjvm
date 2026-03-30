@@ -1,9 +1,13 @@
-use std::path::Path;
+use std::{
+    io::{self, BufRead, Write},
+    path::Path,
+};
 
 use anyhow::{Context, bail};
 
+use crate::core::jdk_catalog::Vendor;
 use crate::core::jdk_switcher::{
-    JdkLookupResult, find_jdk_by_version, jdk_display_name, switch_to_jdk,
+    find_jdk_by_version, jdk_display_name, switch_to_jdk, vendor_to_str,
 };
 
 /// Validates that a path does not contain shell metacharacters that would be
@@ -22,23 +26,84 @@ fn validate_shell_safe_path(path: &Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Switches the globally active JDK to the version matching `version`.
+/// Returns `true` if `jdk_dir` has no `.sjvm-vendor` file (custom / unknown JDK).
+fn is_custom_jdk(jdk_dir: &Path) -> bool {
+    !jdk_dir.join(".sjvm-vendor").exists()
+}
+
+/// When multiple JDK candidates are found, interactively prompt the user to pick
+/// one (max 3 attempts).  Returns the selected path on success.
 ///
-/// # Errors
-/// Returns an error if no JDK matching `version` is found or if the symlink
-/// cannot be updated.
-pub(crate) fn use_version(version: &str) -> anyhow::Result<()> {
-    match find_jdk_by_version(version) {
-        JdkLookupResult::Found(jdk_path) => {
-            switch_to_jdk(&jdk_path)?;
-            let jdk_path_display = jdk_path.to_string_lossy();
-            println!("✅ Now using JDK: {jdk_path_display}");
-            Ok(())
-        }
-        JdkLookupResult::NotFound => {
-            bail!("JDK version '{version}' not found.");
+/// In non-interactive (non-terminal stdin) mode, returns the first candidate.
+fn disambiguate(candidates: &[std::path::PathBuf]) -> anyhow::Result<std::path::PathBuf> {
+    use std::io::IsTerminal as _;
+
+    if !io::stdin().is_terminal() {
+        // Non-interactive / CI: use first candidate (index 0).
+        return candidates
+            .first()
+            .cloned()
+            .context("BUG: empty candidate list passed to disambiguate");
+    }
+
+    println!("Multiple JDKs match. Please choose one:");
+    for (i, path) in candidates.iter().enumerate() {
+        let name = jdk_display_name(path);
+        let label = if is_custom_jdk(path) {
+            " [custom]".to_owned()
+        } else {
+            String::new()
+        };
+        println!("  {}) {name}{label}", i + 1);
+    }
+
+    let stdin = io::stdin();
+    const MAX_ATTEMPTS: u8 = 3;
+    for attempt in 0..MAX_ATTEMPTS {
+        print!("Enter number (1-{}): ", candidates.len());
+        io::stdout().flush().context("Failed to flush stdout")?;
+
+        let mut line = String::new();
+        stdin
+            .lock()
+            .read_line(&mut line)
+            .context("Failed to read user input")?;
+
+        let trimmed = line.trim();
+        match trimmed.parse::<usize>() {
+            Ok(n) if n >= 1 && n <= candidates.len() => {
+                return Ok(candidates[n - 1].clone());
+            }
+            _ => {
+                let remaining = MAX_ATTEMPTS - attempt - 1;
+                if remaining > 0 {
+                    eprintln!(
+                        "Invalid input '{trimmed}'. Please enter a number between 1 and {}. ({remaining} attempt(s) left)",
+                        candidates.len()
+                    );
+                }
+            }
         }
     }
+
+    bail!("Too many invalid attempts. Aborting JDK selection.");
+}
+
+/// Switches the globally active JDK to the version matching `version`,
+/// optionally filtered by `vendor`.
+///
+/// # Errors
+/// Returns an error if no JDK matching `version` (and optional vendor) is found
+/// or if the symlink cannot be updated.
+pub(crate) fn use_version(version: &str, vendor: Option<&Vendor>) -> anyhow::Result<()> {
+    let candidates = find_jdk_by_version(version, vendor);
+
+    let jdk_path = resolve_candidate(version, vendor, candidates)?;
+
+    switch_to_jdk(&jdk_path)?;
+    let jdk_path_display = jdk_path.to_string_lossy();
+    println!("✅ Now using JDK: {jdk_path_display}");
+    Ok(())
 }
 
 /// Prints shell `export` commands to activate the JDK for the current session only.
@@ -46,17 +111,37 @@ pub(crate) fn use_version(version: &str) -> anyhow::Result<()> {
 /// # Errors
 /// Returns an error if no JDK matching `version` is found, if the path
 /// contains shell metacharacters, or if the path is not valid UTF-8.
-pub(crate) fn use_version_local(version: &str) -> anyhow::Result<()> {
-    match find_jdk_by_version(version) {
-        JdkLookupResult::Found(jdk_path) => {
-            let display_name = jdk_display_name(&jdk_path);
-            validate_shell_safe_path(&jdk_path)?;
-            print_local_env_commands(&jdk_path, &display_name)?;
-            Ok(())
+pub(crate) fn use_version_local(version: &str, vendor: Option<&Vendor>) -> anyhow::Result<()> {
+    let candidates = find_jdk_by_version(version, vendor);
+
+    let jdk_path = resolve_candidate(version, vendor, candidates)?;
+
+    let display_name = jdk_display_name(&jdk_path);
+    validate_shell_safe_path(&jdk_path)?;
+    print_local_env_commands(&jdk_path, &display_name)?;
+    Ok(())
+}
+
+/// Resolves a list of candidates to a single JDK path, handling empty / single /
+/// multiple-match cases.
+fn resolve_candidate(
+    version: &str,
+    vendor: Option<&Vendor>,
+    candidates: Vec<std::path::PathBuf>,
+) -> anyhow::Result<std::path::PathBuf> {
+    match candidates.len() {
+        0 => {
+            if let Some(v) = vendor {
+                let vendor_name = vendor_to_str(v);
+                bail!(
+                    "JDK version '{version}' not found for vendor '{vendor_name}'.\n   Install it with: sjvm install {version} --vendor {vendor_name}"
+                );
+            } else {
+                bail!("JDK version '{version}' not found.");
+            }
         }
-        JdkLookupResult::NotFound => {
-            bail!("JDK version '{version}' not found.");
-        }
+        1 => Ok(candidates.into_iter().next().unwrap()),
+        _ => disambiguate(&candidates),
     }
 }
 
@@ -91,7 +176,7 @@ fn print_local_env_commands(jdk_path: &Path, _display_name: &str) -> anyhow::Res
 mod tests {
     use std::path::PathBuf;
 
-    use crate::core::jdk_switcher::{JdkLookupResult, find_jdk_by_version_in_list};
+    use crate::core::jdk_switcher::find_jdk_by_version_in_list;
 
     use super::*;
 
@@ -108,32 +193,26 @@ mod tests {
     fn test_find_jdk_by_version_number() {
         let jdks = test_jdks();
 
-        let result = find_jdk_by_version_in_list("11", &jdks);
-        assert!(matches!(result, JdkLookupResult::Found(_)));
-
-        if let JdkLookupResult::Found(path) = result {
-            assert!(path.to_string_lossy().contains("temurin-11"));
-        }
+        let result = find_jdk_by_version_in_list("11", &jdks, None);
+        assert!(!result.is_empty());
+        assert!(result[0].to_string_lossy().contains("temurin-11"));
     }
 
     #[test]
     fn test_find_jdk_by_vendor_name() {
         let jdks = test_jdks();
 
-        let result = find_jdk_by_version_in_list("graalvm", &jdks);
-        assert!(matches!(result, JdkLookupResult::Found(_)));
-
-        if let JdkLookupResult::Found(path) = result {
-            assert!(path.to_string_lossy().contains("graalvm"));
-        }
+        let result = find_jdk_by_version_in_list("graalvm", &jdks, None);
+        assert!(!result.is_empty());
+        assert!(result[0].to_string_lossy().contains("graalvm"));
     }
 
     #[test]
     fn test_find_jdk_version_not_found() {
         let jdks = test_jdks();
 
-        let result = find_jdk_by_version_in_list("8", &jdks);
-        assert_eq!(result, JdkLookupResult::NotFound);
+        let result = find_jdk_by_version_in_list("8", &jdks, None);
+        assert!(result.is_empty());
     }
 
     #[test]
@@ -208,5 +287,36 @@ mod tests {
     fn test_shell_safe_path_accepts_normal_path() {
         let good_path = PathBuf::from("/usr/lib/jvm/temurin-17.0.1-jdk");
         assert!(validate_shell_safe_path(&good_path).is_ok());
+    }
+
+    #[test]
+    fn test_resolve_candidate_not_found_no_vendor() {
+        let result = resolve_candidate("99", None, vec![]);
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("not found"), "expected 'not found' in: {msg}");
+    }
+
+    #[test]
+    fn test_resolve_candidate_not_found_with_vendor() {
+        let result = resolve_candidate("999", Some(&Vendor::GraalVm), vec![]);
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(
+            msg.contains("not found for vendor 'graalvm'"),
+            "expected vendor hint in: {msg}"
+        );
+        assert!(
+            msg.contains("sjvm install"),
+            "expected install hint in: {msg}"
+        );
+    }
+
+    #[test]
+    fn test_resolve_candidate_single_match() {
+        let path = PathBuf::from("/usr/lib/jvm/jdk-17");
+        let result = resolve_candidate("17", None, vec![path.clone()]);
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), path);
     }
 }
