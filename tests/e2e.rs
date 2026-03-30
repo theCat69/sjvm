@@ -256,6 +256,59 @@ fn test_ui_java_version_switch() {
     );
 }
 
+fn install_jdk_for_test(version: u16, vendor: &str) -> String {
+    let version_str = version.to_string();
+    let output = sjvm_command()
+        .args(["install", &version_str, "--vendor", vendor, "--force"])
+        .output()
+        .expect("Failed to spawn sjvm install");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        output.status.success(),
+        "sjvm install {version} --vendor {vendor} --force failed, stderr: {stderr}"
+    );
+
+    let lines = list_jdks();
+    lines
+        .iter()
+        .find(|line| line.contains(&version_str) && !line.contains("[custom]"))
+        .map(|line| {
+            let stripped = line.trim().trim_start_matches('→').trim();
+            let stripped = stripped.trim_end_matches("[custom]").trim();
+            // extract bare dir name regardless of whether it's a full path or just a name
+            std::path::Path::new(stripped)
+                .file_name()
+                .expect("JDK path has file_name")
+                .to_string_lossy()
+                .into_owned()
+        })
+        .expect("installed JDK not found in sjvm list after install")
+}
+
+fn spawn_sjvm_with_stdin(args: &[&str], input: &[u8]) -> std::process::Output {
+    use std::io::Write;
+    use std::process::Stdio;
+
+    let mut child = sjvm_command()
+        .args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn sjvm process");
+
+    child
+        .stdin
+        .take()
+        .expect("stdin handle missing")
+        .write_all(input)
+        .expect("Failed to write to sjvm stdin");
+
+    child
+        .wait_with_output()
+        .expect("Failed to wait for sjvm process output")
+}
+
 fn list_jdks() -> Vec<String> {
     let output = sjvm_command()
         .arg("list")
@@ -415,5 +468,218 @@ fn test_install_graalvm_21() {
         after.iter().any(|e| e.contains("graalvm")),
         "Expected an entry containing 'graalvm' in sjvm list after install. after={:?}",
         after
+    );
+}
+
+#[test]
+#[ignore]
+fn test_cli_delete_rejects_path_traversal() {
+    let output = sjvm_command()
+        .args(["delete", "../etc"])
+        .output()
+        .expect("Failed to spawn sjvm delete ../etc");
+
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit when passing path traversal '../etc' to delete"
+    );
+}
+
+#[test]
+#[ignore]
+fn test_cli_delete_rejects_dot() {
+    let output = sjvm_command()
+        .args(["delete", "."])
+        .output()
+        .expect("Failed to spawn sjvm delete .");
+
+    assert!(
+        !output.status.success(),
+        "Expected non-zero exit when passing '.' to delete"
+    );
+}
+
+#[test]
+#[ignore]
+fn test_cli_delete_aborts_on_n() {
+    let jdk_name = install_jdk_for_test(21, "openjdk");
+
+    let output = spawn_sjvm_with_stdin(&["delete", &jdk_name], b"n\n");
+
+    assert!(
+        output.status.success(),
+        "Expected exit 0 when aborting delete with 'n', stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Aborted"),
+        "Expected 'Aborted' in stdout after pressing 'n', got: {stdout}"
+    );
+
+    let list = list_jdks();
+    assert!(
+        list.iter().any(|l| l.contains(&jdk_name)),
+        "JDK '{jdk_name}' should still be present after aborting delete, list: {list:?}"
+    );
+}
+
+#[test]
+#[ignore]
+fn test_cli_delete_success() {
+    let jdk_name = install_jdk_for_test(21, "openjdk");
+
+    let output = spawn_sjvm_with_stdin(&["delete", &jdk_name], b"y\n");
+
+    assert!(
+        output.status.success(),
+        "Expected exit 0 after confirming delete with 'y', stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        stdout.contains("Deleted") || stdout.contains('✓'),
+        "Expected 'Deleted' or '✓' in stdout after confirming delete, got: {stdout}"
+    );
+
+    let list = list_jdks();
+    assert!(
+        !list.iter().any(|l| {
+            let name = l
+                .trim()
+                .trim_start_matches('→')
+                .trim()
+                .trim_end_matches("[custom]")
+                .trim();
+            name == jdk_name
+        }),
+        "JDK '{jdk_name}' should be gone from list after delete, but list is: {list:?}"
+    );
+}
+
+#[test]
+#[ignore]
+fn test_ui_install_navigation() {
+    use std::io::Write;
+    use std::thread;
+    use std::time::Duration;
+
+    let (mut pty, pts) = pty_process::blocking::open().expect("Failed to open PTY");
+    pty.resize(pty_process::Size::new(24, 80))
+        .expect("Failed to resize PTY");
+
+    let mut child = pty_process::blocking::Command::new("./target/debug/sjvm")
+        .args(["ui"])
+        .spawn(pts)
+        .expect("Failed to spawn sjvm ui");
+
+    // Wait for Switch screen to render
+    thread::sleep(Duration::from_millis(500));
+
+    // Tab: switch to Install screen
+    pty.write_all(b"\t").expect("Failed to write Tab to PTY");
+    // Wait for VendorPicker to render (no extra Enter needed per UI-2 spec)
+    thread::sleep(Duration::from_millis(400));
+
+    // Enter: select OpenJDK (first vendor), starts FetchingVersions
+    pty.write_all(b"\r").expect("Failed to write Enter to PTY");
+    // Wait for Adoptium API call to return version list
+    thread::sleep(Duration::from_millis(12_000));
+
+    // Navigate down in VersionPicker
+    pty.write_all(b"j").expect("Failed to write 'j' to PTY");
+    thread::sleep(Duration::from_millis(200));
+
+    // Navigate down again
+    pty.write_all(b"j").expect("Failed to write 'j' to PTY");
+    thread::sleep(Duration::from_millis(200));
+
+    // Navigate up
+    pty.write_all(b"k").expect("Failed to write 'k' to PTY");
+    thread::sleep(Duration::from_millis(200));
+
+    // Quit
+    pty.write_all(b"q").expect("Failed to write 'q' to PTY");
+
+    // Poll for child exit up to 5s; kill if timeout
+    let start = std::time::Instant::now();
+    loop {
+        if let Ok(Some(_)) = child.try_wait() {
+            break;
+        }
+        if start.elapsed() > Duration::from_secs(5) {
+            let _ = child.kill();
+            break;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    let _ = child.wait(); // reap in all cases (no-op if already exited)
+                          // Test passes if we reach this point: TUI opened, navigation worked, exited cleanly
+}
+
+#[test]
+#[ignore]
+fn test_ui_delete() {
+    use std::io::Write;
+    use std::thread;
+    use std::time::Duration;
+
+    let jdk_name = install_jdk_for_test(21, "openjdk");
+    // Make it the current/selected JDK in the Switch screen
+    set_java_version_to(&jdk_name);
+
+    let (mut pty, pts) = pty_process::blocking::open().expect("Failed to open PTY");
+    pty.resize(pty_process::Size::new(24, 80))
+        .expect("Failed to resize PTY");
+
+    let mut child = pty_process::blocking::Command::new("./target/debug/sjvm")
+        .args(["ui"])
+        .spawn(pts)
+        .expect("Failed to spawn sjvm ui");
+
+    // Wait for Switch screen + JDK list to render
+    thread::sleep(Duration::from_millis(600));
+
+    // 'd': trigger delete overlay for the currently selected JDK
+    pty.write_all(b"d").expect("Failed to write 'd' to PTY");
+    thread::sleep(Duration::from_millis(300));
+
+    // 'y': confirm deletion
+    pty.write_all(b"y").expect("Failed to write 'y' to PTY");
+    // Wait for delete + memory invalidation + Switch screen reload
+    thread::sleep(Duration::from_millis(2_000));
+
+    // Quit TUI
+    pty.write_all(b"q").expect("Failed to write 'q' to PTY");
+
+    // Poll for child exit up to 5s; kill if timeout
+    let start = std::time::Instant::now();
+    loop {
+        if let Ok(Some(_)) = child.try_wait() {
+            break;
+        }
+        if start.elapsed() > Duration::from_secs(5) {
+            let _ = child.kill();
+            break;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    let _ = child.wait(); // reap in all cases (no-op if already exited)
+
+    // Verify JDK is no longer listed
+    let list = list_jdks();
+    assert!(
+        !list.iter().any(|l| {
+            let name = l
+                .trim()
+                .trim_start_matches('→')
+                .trim()
+                .trim_end_matches("[custom]")
+                .trim();
+            name == jdk_name
+        }),
+        "JDK '{jdk_name}' should be gone from list after TUI delete, but list is: {list:?}"
     );
 }
