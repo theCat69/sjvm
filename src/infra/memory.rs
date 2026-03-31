@@ -1,5 +1,5 @@
-use anyhow::{Context, bail};
-use bincode::{Decode, Encode, config};
+use anyhow::{bail, Context};
+use bincode::{config, Decode, Encode};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -29,21 +29,15 @@ pub(crate) struct Memory {
 ///
 /// After `invalidate_memory()` is called the next invocation will re-read from
 /// disk (or rebuild from the filesystem if the disk file is also absent).
-pub(crate) fn memory() -> Memory {
+pub(crate) fn memory() -> anyhow::Result<Memory> {
     let mut guard = MEMORY.lock().unwrap_or_else(|e| e.into_inner());
     if guard.is_none() {
-        match load_or_init() {
-            Ok(m) => *guard = Some(m),
-            Err(e) => {
-                eprintln!("Fatal: failed to initialise JDK memory cache: {e:#}");
-                std::process::exit(1);
-            }
-        }
+        *guard = Some(load_or_init()?);
     }
     guard
         .as_ref()
-        .expect("memory always Some after init")
-        .clone()
+        .ok_or_else(|| anyhow::anyhow!("BUG: memory not initialized after load"))
+        .cloned()
 }
 
 /// Returns the path to the persistent memory cache file.

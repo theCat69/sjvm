@@ -96,7 +96,7 @@ fn disambiguate(candidates: &[std::path::PathBuf]) -> anyhow::Result<std::path::
 /// Returns an error if no JDK matching `version` (and optional vendor) is found
 /// or if the symlink cannot be updated.
 pub(crate) fn use_version(version: &str, vendor: Option<&Vendor>) -> anyhow::Result<()> {
-    let candidates = find_jdk_by_version(version, vendor);
+    let candidates = find_jdk_by_version(version, vendor)?;
 
     let jdk_path = resolve_candidate(version, vendor, candidates)?;
 
@@ -112,7 +112,7 @@ pub(crate) fn use_version(version: &str, vendor: Option<&Vendor>) -> anyhow::Res
 /// Returns an error if no JDK matching `version` is found, if the path
 /// contains shell metacharacters, or if the path is not valid UTF-8.
 pub(crate) fn use_version_local(version: &str, vendor: Option<&Vendor>) -> anyhow::Result<()> {
-    let candidates = find_jdk_by_version(version, vendor);
+    let candidates = find_jdk_by_version(version, vendor)?;
 
     let jdk_path = resolve_candidate(version, vendor, candidates)?;
 

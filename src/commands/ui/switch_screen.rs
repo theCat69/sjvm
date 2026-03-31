@@ -37,7 +37,7 @@ pub(crate) struct JdkItem {
 
 impl SwitchState {
     pub(crate) fn new() -> anyhow::Result<Self> {
-        let jdks = memory().jdks;
+        let jdks = memory()?.jdks;
         let current_link = symlink_path();
         // If the symlink cannot be read, fall back to an empty path so the TUI
         // still renders — the current indicator simply won't be shown.

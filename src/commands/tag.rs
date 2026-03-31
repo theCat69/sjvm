@@ -23,7 +23,7 @@ pub(crate) fn run_tag(name: &str, vendor: &Vendor, force: bool) -> Result<()> {
     let vendor_name = vendor_to_str(vendor);
 
     // Find the JDK directory by exact directory-name match in the cached list.
-    let jdk_path: PathBuf = memory()
+    let jdk_path: PathBuf = memory()?
         .jdks
         .iter()
         .find(|p| {

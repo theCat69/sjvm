@@ -35,8 +35,15 @@ pub(crate) fn vendor_to_str(vendor: &Vendor) -> &'static str {
 /// - JDK has `.sjvm-vendor` matching the filter → included
 /// - JDK has `.sjvm-vendor` NOT matching the filter → excluded
 /// - JDK has NO `.sjvm-vendor` (custom JDK) → always included
-pub(crate) fn find_jdk_by_version(version: &str, vendor_filter: Option<&Vendor>) -> Vec<PathBuf> {
-    find_jdk_by_version_in_list(version, &memory().jdks, vendor_filter)
+pub(crate) fn find_jdk_by_version(
+    version: &str,
+    vendor_filter: Option<&Vendor>,
+) -> anyhow::Result<Vec<PathBuf>> {
+    Ok(find_jdk_by_version_in_list(
+        version,
+        &memory()?.jdks,
+        vendor_filter,
+    ))
 }
 
 /// Finds all JDKs matching `version` in an explicit `jdks` list, optionally
