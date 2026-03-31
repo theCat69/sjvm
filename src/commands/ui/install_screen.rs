@@ -16,6 +16,7 @@ use crate::core::jdk_catalog::{ArtifactInfo, Vendor};
 
 /// Represents the current state of the install screen flow.
 #[derive(Clone)]
+#[allow(dead_code)]
 pub(crate) enum InstallState {
     /// User is selecting a JDK vendor. `selected` is 0=OpenJDK, 1=GraalVM.
     VendorPicker { selected: usize },
