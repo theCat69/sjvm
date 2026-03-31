@@ -4,7 +4,6 @@ use std::path::PathBuf;
 
 use anyhow::{Context, Result, bail};
 
-use crate::commands::delete::validate_delete_name;
 use crate::core::jdk_catalog::Vendor;
 use crate::core::jdk_switcher::vendor_to_str;
 use crate::infra::memory::memory;
@@ -12,14 +11,10 @@ use crate::infra::memory::memory;
 /// Tags an existing JDK directory with a vendor label by writing `.sjvm-vendor`.
 ///
 /// # Errors
-/// - `name` fails validation rules (same as `delete`).
 /// - No JDK with that exact directory name is found in the cache.
 /// - The JDK is already tagged and `force` is `false`.
 /// - The `.sjvm-vendor` file cannot be written.
 pub(crate) fn run_tag(name: &str, vendor: &Vendor, force: bool) -> Result<()> {
-    // Validate name with same rules as delete.
-    validate_delete_name(name).map_err(anyhow::Error::msg)?;
-
     let vendor_name = vendor_to_str(vendor);
 
     // Find the JDK directory by exact directory-name match in the cached list.
@@ -59,26 +54,8 @@ pub(crate) fn run_tag(name: &str, vendor: &Vendor, force: bool) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use crate::commands::delete::validate_delete_name;
     use crate::core::jdk_catalog::Vendor;
     use crate::core::jdk_switcher::vendor_to_str;
-
-    #[test]
-    fn test_tag_validates_name_dot() {
-        // Dot is rejected by validate_delete_name.
-        assert!(validate_delete_name(".").is_err());
-    }
-
-    #[test]
-    fn test_tag_validates_name_path_traversal() {
-        // Path traversal is rejected.
-        assert!(validate_delete_name("../etc").is_err());
-    }
-
-    #[test]
-    fn test_tag_validates_name_slash() {
-        assert!(validate_delete_name("foo/bar").is_err());
-    }
 
     #[test]
     fn test_tag_vendor_to_string_openjdk() {

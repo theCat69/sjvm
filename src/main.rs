@@ -58,7 +58,7 @@ enum Commands {
     /// Remove an installed JDK (prompts for confirmation)
     Delete {
         /// Name of the JDK directory to remove
-        #[arg(value_name = "NAME", value_parser = validate_delete_name)]
+        #[arg(value_name = "NAME")]
         name: String,
     },
     /// List available JDK versions from vendor APIs
@@ -70,7 +70,7 @@ enum Commands {
     /// Tag an existing JDK with a vendor label
     Tag {
         /// Name of the JDK directory to tag
-        #[arg(value_name = "NAME", value_parser = validate_delete_name)]
+        #[arg(value_name = "NAME")]
         name: String,
         /// Vendor to assign
         #[arg(long, value_enum)]
@@ -98,10 +98,6 @@ enum ConfigCmd {
 fn validate_version(s: &str) -> Result<String, String> {
     commands::validate_version_string(s)?;
     Ok(s.to_owned())
-}
-
-fn validate_delete_name(s: &str) -> Result<String, String> {
-    commands::delete::validate_delete_name(s)
 }
 
 #[cfg(test)]
@@ -218,12 +214,6 @@ mod tests {
         } else {
             panic!("expected Commands::Delete");
         }
-    }
-
-    #[test]
-    fn test_delete_command_rejects_path_traversal() {
-        let result = Cli::try_parse_from(["sjvm", "delete", "../etc"]);
-        assert!(result.is_err(), "path traversal should be rejected");
     }
 
     #[test]

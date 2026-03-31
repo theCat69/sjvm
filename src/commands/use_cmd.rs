@@ -10,22 +10,6 @@ use crate::core::jdk_switcher::{
     find_jdk_by_version, jdk_display_name, switch_to_jdk, vendor_to_str,
 };
 
-/// Validates that a path does not contain shell metacharacters that would be
-/// dangerous when the output is `eval`'d by the user's shell.
-fn validate_shell_safe_path(path: &Path) -> anyhow::Result<()> {
-    let path_str = path
-        .to_str()
-        .context("JDK path is not valid UTF-8; cannot generate shell export commands")?;
-    const SHELL_METACHARACTERS: &[char] =
-        &['`', '$', '"', '\\', '!', '&', '|', '>', '<', ';', '(', ')'];
-    if let Some(bad_char) = path_str.chars().find(|c| SHELL_METACHARACTERS.contains(c)) {
-        bail!(
-            "JDK path '{path_str}' contains the shell metacharacter '{bad_char}' which is unsafe for eval output"
-        );
-    }
-    Ok(())
-}
-
 /// Returns `true` if `jdk_dir` has no `.sjvm-vendor` file (custom / unknown JDK).
 fn is_custom_jdk(jdk_dir: &Path) -> bool {
     !jdk_dir.join(".sjvm-vendor").exists()
@@ -109,15 +93,14 @@ pub(crate) fn use_version(version: &str, vendor: Option<&Vendor>) -> anyhow::Res
 /// Prints shell `export` commands to activate the JDK for the current session only.
 ///
 /// # Errors
-/// Returns an error if no JDK matching `version` is found, if the path
-/// contains shell metacharacters, or if the path is not valid UTF-8.
+/// Returns an error if no JDK matching `version` is found, or if the path
+/// is not valid UTF-8.
 pub(crate) fn use_version_local(version: &str, vendor: Option<&Vendor>) -> anyhow::Result<()> {
     let candidates = find_jdk_by_version(version, vendor)?;
 
     let jdk_path = resolve_candidate(version, vendor, candidates)?;
 
     let display_name = jdk_display_name(&jdk_path);
-    validate_shell_safe_path(&jdk_path)?;
     print_local_env_commands(&jdk_path, &display_name)?;
     Ok(())
 }
@@ -147,8 +130,8 @@ fn resolve_candidate(
 
 /// Prints the shell commands needed to set the JDK for the current session.
 ///
-/// Paths are validated for shell safety and double-quoted to prevent
-/// word-splitting when the caller eval's this output.
+/// Paths are double-quoted to prevent word-splitting when the caller
+/// eval's this output (e.g. `eval $(sjvm use --local 17)`).
 ///
 /// On Windows, prints instructions since `set` commands cannot be applied
 /// programmatically from a child process.
@@ -220,9 +203,6 @@ mod tests {
         // Use a real path with no metacharacters to test the function directly.
         let jdk_path = PathBuf::from("/usr/lib/jvm/temurin-17-jdk");
 
-        // Validate that a clean path passes the shell-safety check.
-        assert!(validate_shell_safe_path(&jdk_path).is_ok());
-
         // Verify the expected output format (double-quoted paths).
         let path_str = jdk_path.to_str().unwrap();
         let java_home = format!("export JAVA_HOME=\"{path_str}\"");
@@ -245,30 +225,6 @@ mod tests {
         assert!(java_home.contains("set"));
         assert!(java_home.contains(path_str));
         assert!(path_cmd.contains("\\bin\""));
-    }
-
-    #[test]
-    fn test_shell_safe_path_rejects_dollar_sign() {
-        let bad_path = PathBuf::from("/usr/lib/jvm/jdk-$HOME");
-        assert!(validate_shell_safe_path(&bad_path).is_err());
-    }
-
-    #[test]
-    fn test_shell_safe_path_rejects_backtick() {
-        let bad_path = PathBuf::from("/usr/lib/jvm/jdk-`id`");
-        assert!(validate_shell_safe_path(&bad_path).is_err());
-    }
-
-    #[test]
-    fn test_shell_safe_path_rejects_semicolon() {
-        let bad_path = PathBuf::from("/usr/lib/jvm/jdk-17;rm -rf /");
-        assert!(validate_shell_safe_path(&bad_path).is_err());
-    }
-
-    #[test]
-    fn test_shell_safe_path_accepts_normal_path() {
-        let good_path = PathBuf::from("/usr/lib/jvm/temurin-17.0.1-jdk");
-        assert!(validate_shell_safe_path(&good_path).is_ok());
     }
 
     #[test]

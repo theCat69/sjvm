@@ -1,5 +1,5 @@
-use anyhow::{bail, Context};
-use bincode::{config, Decode, Encode};
+use anyhow::{Context, bail};
+use bincode::{Decode, Encode, config};
 use std::{
     fs,
     path::{Path, PathBuf},

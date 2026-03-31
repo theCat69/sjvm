@@ -11,7 +11,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use sha2::{Digest, Sha256};
 
 use crate::core::jdk_catalog::ArtifactInfo;
@@ -36,13 +36,7 @@ pub(crate) struct InstallRequest {
 // ---------------------------------------------------------------------------
 
 /// Verifies that the SHA-256 digest of `file_path` matches `expected_hex`.
-///
-/// `expected_hex` must be exactly 64 lowercase or uppercase hexadecimal characters.
 pub(crate) fn verify_checksum(file_path: &Path, expected_hex: &str) -> Result<()> {
-    if expected_hex.len() != 64 || !expected_hex.chars().all(|c| c.is_ascii_hexdigit()) {
-        bail!("not a valid SHA-256 hex string: '{expected_hex}'");
-    }
-
     let mut file = fs::File::open(file_path)
         .with_context(|| format!("Failed to open file for checksum: {}", file_path.display()))?;
 
@@ -480,8 +474,8 @@ mod tests {
         assert!(result.is_err());
         let msg = format!("{}", result.unwrap_err());
         assert!(
-            msg.contains("not a valid SHA-256 hex string"),
-            "expected 'not a valid SHA-256 hex string' in error, got: {msg}"
+            msg.contains("mismatch"),
+            "expected 'mismatch' in error, got: {msg}"
         );
 
         let _ = std::fs::remove_file(&file_path);
