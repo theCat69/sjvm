@@ -482,10 +482,10 @@ fn test_install_graalvm_21() {
 #[test]
 #[ignore]
 fn test_cli_delete_rejects_path_traversal() {
-    let output = sjvm_command()
-        .args(["delete", "../etc"])
-        .output()
-        .expect("Failed to spawn sjvm delete ../etc");
+    // Provide "y\n" so the confirmation prompt is answered and delete_jdk is reached.
+    // The real path-traversal guard (canonicalize + starts_with check) then rejects
+    // "../etc" with a non-zero exit — which is what this test asserts.
+    let output = spawn_sjvm_with_stdin(&["delete", "../etc"], b"y\n");
 
     assert!(
         !output.status.success(),
@@ -496,10 +496,10 @@ fn test_cli_delete_rejects_path_traversal() {
 #[test]
 #[ignore]
 fn test_cli_delete_rejects_dot() {
-    let output = sjvm_command()
-        .args(["delete", "."])
-        .output()
-        .expect("Failed to spawn sjvm delete .");
+    // Provide "y\n" so the confirmation prompt is answered and delete_jdk is reached.
+    // The strengthened security check (canonical_path == canonical_dest) then rejects
+    // "." — which resolves to the JDKs directory itself — with a non-zero exit.
+    let output = spawn_sjvm_with_stdin(&["delete", "."], b"y\n");
 
     assert!(
         !output.status.success(),
@@ -624,7 +624,7 @@ fn test_ui_install_navigation() {
         thread::sleep(Duration::from_millis(100));
     }
     let _ = child.wait(); // reap in all cases (no-op if already exited)
-    // Test passes if we reach this point: TUI opened, navigation worked, exited cleanly
+                          // Test passes if we reach this point: TUI opened, navigation worked, exited cleanly
 }
 
 #[test]

@@ -6,7 +6,7 @@ use std::{
     path::PathBuf,
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 
 use crate::infra::config::config;
 use crate::infra::memory::invalidate_memory;
@@ -47,9 +47,9 @@ pub(crate) fn delete_jdk(jdk_name: &str) -> Result<PathBuf> {
         .canonicalize()
         .with_context(|| format!("JDK '{}' not found in '{}'", jdk_name, dest_dir.display()))?;
 
-    if !canonical_path.starts_with(&canonical_dest) {
+    if canonical_path == canonical_dest || !canonical_path.starts_with(&canonical_dest) {
         bail!(
-            "Security: path '{}' escapes the JDKs directory '{}'",
+            "Security: path '{}' escapes or equals the JDKs directory '{}'",
             canonical_path.display(),
             canonical_dest.display()
         );
