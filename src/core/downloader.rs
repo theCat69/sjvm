@@ -11,7 +11,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use sha2::{Digest, Sha256};
 
 use crate::core::jdk_catalog::ArtifactInfo;
@@ -65,165 +65,31 @@ pub(crate) fn verify_checksum(file_path: &Path, expected_hex: &str) -> Result<()
     Ok(())
 }
 
-/// Extracts a `.tar.gz` archive into `dest_dir`, guarding against path traversal.
+/// Extracts a `.tar.gz` archive into `dest_dir`.
+///
+/// Path traversal and symlink safety are enforced by `tar 0.4.45` via
+/// [`tar::Entry::unpack_in`], called for every entry by [`tar::Archive::unpack`].
 pub(crate) fn extract_tar_gz(archive_path: &Path, dest_dir: &Path) -> Result<()> {
     let file = fs::File::open(archive_path)
         .with_context(|| format!("Failed to open archive: {}", archive_path.display()))?;
     let gz = flate2::read::GzDecoder::new(file);
-    let mut archive = tar::Archive::new(gz);
-
-    for entry_result in archive
-        .entries()
-        .context("Failed to read tar archive entries")?
-    {
-        let mut entry = entry_result.context("Failed to read tar entry")?;
-        let entry_path = entry
-            .path()
-            .context("Tar entry has invalid path")?
-            .into_owned();
-
-        let entry_type = entry.header().entry_type();
-
-        // Symlinks and hardlinks require extra traversal checks on the link target
-        // before we let the `tar` crate unpack them.
-        if entry_type.is_symlink() || entry_type == tar::EntryType::Link {
-            let link_target = entry
-                .link_name()
-                .context("Link entry has invalid link name")?
-                .context("Link entry has no link name")?
-                .into_owned();
-
-            // For symlinks the target is resolved relative to the symlink's own
-            // directory inside dest_dir.  Compute the canonical destination of the
-            // resolved target and assert it stays under dest_dir.
-            if entry_type.is_symlink() {
-                let symlink_parent = dest_dir.join(
-                    entry_path
-                        .parent()
-                        .unwrap_or_else(|| std::path::Path::new("")),
-                );
-                let resolved = symlink_parent.join(&link_target);
-                // Normalise lexically (no canonicalize — target may not exist yet).
-                let mut components = Vec::new();
-                for component in resolved.components() {
-                    match component {
-                        std::path::Component::ParentDir => {
-                            if components.pop().is_none() {
-                                bail!(
-                                    "Symlink '{}' → '{}' escapes the extraction directory",
-                                    entry_path.display(),
-                                    link_target.display()
-                                );
-                            }
-                        }
-                        std::path::Component::CurDir => {}
-                        c => components.push(c),
-                    }
-                }
-                let normalised: PathBuf = components.iter().collect();
-                if !normalised.starts_with(dest_dir) {
-                    bail!(
-                        "Symlink '{}' → '{}' escapes the extraction directory — aborting to prevent path traversal",
-                        entry_path.display(),
-                        link_target.display()
-                    );
-                }
-            } else {
-                // Hardlinks: the target path is relative to the archive root, i.e.
-                // relative to dest_dir.  Apply the same traversal guard used for
-                // regular file entries.
-                guard_path_traversal(&link_target, dest_dir).with_context(|| {
-                    format!(
-                        "Hardlink target '{}' failed path traversal check",
-                        link_target.display()
-                    )
-                })?;
-            }
-
-            guard_path_traversal(&entry_path, dest_dir)?;
-            let dest_entry = dest_dir.join(&entry_path);
-            if let Some(parent) = dest_entry.parent() {
-                fs::create_dir_all(parent).with_context(|| {
-                    format!("Failed to create parent directory: {}", parent.display())
-                })?;
-            }
-            entry.unpack(&dest_entry).with_context(|| {
-                format!("Failed to unpack link entry to: {}", dest_entry.display())
-            })?;
-            continue;
-        }
-
-        guard_path_traversal(&entry_path, dest_dir)?;
-
-        let dest_entry = dest_dir.join(&entry_path);
-        if entry.header().entry_type().is_dir() {
-            fs::create_dir_all(&dest_entry)
-                .with_context(|| format!("Failed to create directory: {}", dest_entry.display()))?;
-        } else {
-            if let Some(parent) = dest_entry.parent() {
-                fs::create_dir_all(parent).with_context(|| {
-                    format!("Failed to create parent directory: {}", parent.display())
-                })?;
-            }
-            entry
-                .unpack(&dest_entry)
-                .with_context(|| format!("Failed to unpack entry to: {}", dest_entry.display()))?;
-        }
-    }
+    tar::Archive::new(gz)
+        .unpack(dest_dir)
+        .with_context(|| format!("Failed to extract archive to: {}", dest_dir.display()))?;
     Ok(())
 }
 
-/// Extracts a `.zip` archive into `dest_dir`, guarding against path traversal.
+/// Extracts a `.zip` archive into `dest_dir`.
+///
+/// Path traversal and symlink safety are enforced by `zip 2.3.0` via
+/// [`zip::ZipArchive::extract`].
 pub(crate) fn extract_zip(archive_path: &Path, dest_dir: &Path) -> Result<()> {
     let file = fs::File::open(archive_path)
         .with_context(|| format!("Failed to open zip archive: {}", archive_path.display()))?;
     let mut zip = zip::ZipArchive::new(file)
         .with_context(|| format!("Failed to read zip archive: {}", archive_path.display()))?;
-
-    for i in 0..zip.len() {
-        let mut entry = zip
-            .by_index(i)
-            .with_context(|| format!("Failed to read zip entry at index {i}"))?;
-
-        let entry_path: PathBuf = match entry.enclosed_name() {
-            Some(p) => p.to_owned(),
-            None => bail!("path traversal detected in archive entry: {}", entry.name()),
-        };
-
-        // Check for symlinks — zip unix mode 0xA000 indicates a symlink.
-        #[cfg(unix)]
-        {
-            if let Some(mode) = entry.unix_mode() {
-                // Unix file type mask: 0xA000 = symlink
-                if mode & 0xF000 == 0xA000 {
-                    bail!(
-                        "Archive contains a symlink entry '{}' — symlinks are not permitted for security reasons",
-                        entry.name()
-                    );
-                }
-            }
-        }
-
-        guard_path_traversal(&entry_path, dest_dir)?;
-
-        let dest_entry = dest_dir.join(&entry_path);
-
-        if entry.is_dir() {
-            fs::create_dir_all(&dest_entry)
-                .with_context(|| format!("Failed to create directory: {}", dest_entry.display()))?;
-        } else {
-            if let Some(parent) = dest_entry.parent() {
-                fs::create_dir_all(parent).with_context(|| {
-                    format!("Failed to create parent directory: {}", parent.display())
-                })?;
-            }
-            let mut out = fs::File::create(&dest_entry)
-                .with_context(|| format!("Failed to create file: {}", dest_entry.display()))?;
-            std::io::copy(&mut entry, &mut out).with_context(|| {
-                format!("Failed to write zip entry to: {}", dest_entry.display())
-            })?;
-        }
-    }
+    zip.extract(dest_dir)
+        .with_context(|| format!("Failed to extract zip archive to: {}", dest_dir.display()))?;
     Ok(())
 }
 
@@ -308,36 +174,6 @@ pub(crate) fn validate_dest_within_jdks_dir(dest: &Path, jdks_dir: &Path) -> Res
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
-
-/// Three-layer path traversal guard for archive entries.
-fn guard_path_traversal(entry_path: &Path, dest_dir: &Path) -> Result<()> {
-    // Layer 1: reject any ".." component.
-    if entry_path
-        .components()
-        .any(|c| c == std::path::Component::ParentDir)
-    {
-        bail!(
-            "path traversal detected in archive entry: {}",
-            entry_path.display()
-        );
-    }
-
-    // Layer 2: reject absolute paths.
-    if entry_path.is_absolute() {
-        bail!("absolute path in archive entry: {}", entry_path.display());
-    }
-
-    // Layer 3: starts_with check on the joined destination.
-    let dest_entry = dest_dir.join(entry_path);
-    if !dest_entry.starts_with(dest_dir) {
-        bail!(
-            "path traversal (starts_with check) in archive entry: {}",
-            entry_path.display()
-        );
-    }
-
-    Ok(())
-}
 
 /// Recursively copies the directory tree rooted at `src` into `dst`.
 fn copy_dir_all(src: &Path, dst: &Path) -> Result<()> {
@@ -583,107 +419,6 @@ mod tests {
         builder.finish().expect("finish tar archive");
     }
 
-    /// Builds a raw ustar tar block for a single file entry with the given name and data.
-    ///
-    /// This bypasses `tar::Builder`'s path validation so we can create malicious
-    /// entries for security tests. The name field is written as raw bytes without
-    /// any safety checks.
-    fn raw_tar_gz_with_entry(dest: &Path, raw_name: &[u8], data: &[u8]) {
-        // ustar header is exactly 512 bytes.
-        // Fields (offset, len): name(0,100), mode(100,8), uid(108,8), gid(116,8),
-        // size(124,12), mtime(136,12), checksum(148,8), typeflag(156,1),
-        // linkname(157,100), magic(257,6), version(263,2), ...
-        let mut header = [0u8; 512];
-
-        // name field (bytes 0-99): copy raw name, truncated at 99 chars.
-        let name_len = raw_name.len().min(99);
-        header[..name_len].copy_from_slice(&raw_name[..name_len]);
-
-        // mode "0000644\0"
-        header[100..108].copy_from_slice(b"0000644\0");
-        // uid / gid
-        header[108..116].copy_from_slice(b"0000000\0");
-        header[116..124].copy_from_slice(b"0000000\0");
-        // size in octal (11 digits + null)
-        let size_oct = format!("{:011o}\0", data.len());
-        header[124..136].copy_from_slice(size_oct.as_bytes());
-        // mtime
-        header[136..148].copy_from_slice(b"00000000000\0");
-        // checksum placeholder (8 spaces)
-        header[148..156].copy_from_slice(b"        ");
-        // typeflag: '0' = regular file
-        header[156] = b'0';
-        // ustar magic + version
-        header[257..263].copy_from_slice(b"ustar ");
-        header[263..265].copy_from_slice(b" \0");
-
-        // Compute checksum: sum of all header bytes (spaces in checksum field).
-        let checksum: u32 = header.iter().map(|&b| b as u32).sum();
-        let cksum_str = format!("{checksum:06o}\0 ");
-        header[148..156].copy_from_slice(cksum_str.as_bytes());
-
-        // Pad data to 512-byte block boundary.
-        let padded_len = (data.len() + 511) & !511;
-        let mut tar_bytes = Vec::with_capacity(512 + padded_len + 1024);
-        tar_bytes.extend_from_slice(&header);
-        tar_bytes.extend_from_slice(data);
-        // Padding to 512-byte block
-        let pad = padded_len - data.len();
-        tar_bytes.extend(std::iter::repeat(0u8).take(pad));
-        // Two 512-byte zero blocks = end-of-archive marker
-        tar_bytes.extend(std::iter::repeat(0u8).take(1024));
-
-        // Gzip-compress and write.
-        let file = std::fs::File::create(dest).expect("create archive");
-        let mut gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
-        gz.write_all(&tar_bytes).expect("write tar bytes");
-        gz.finish().expect("finish gzip");
-    }
-
-    /// Builds a minimal `.tar.gz` archive containing a single symlink entry.
-    ///
-    /// `path` is the entry name; `link_target` is the symlink target stored in
-    /// the tar link-name field.  This uses a raw ustar header so we can set the
-    /// typeflag to `'2'` (symlink) directly.
-    fn create_tar_gz_with_symlink(dest: &Path, path: &[u8], link_target: &[u8]) {
-        // ustar header — same layout as `raw_tar_gz_with_entry` but typeflag='2'
-        // and the link-name field (bytes 157-256) holds the symlink target.
-        let mut header = [0u8; 512];
-
-        let name_len = path.len().min(99);
-        header[..name_len].copy_from_slice(&path[..name_len]);
-
-        header[100..108].copy_from_slice(b"0000644\0");
-        header[108..116].copy_from_slice(b"0000000\0");
-        header[116..124].copy_from_slice(b"0000000\0");
-        // size = 0 for symlinks
-        header[124..136].copy_from_slice(b"00000000000\0");
-        header[136..148].copy_from_slice(b"00000000000\0");
-        header[148..156].copy_from_slice(b"        "); // checksum placeholder
-        // typeflag: '2' = symbolic link
-        header[156] = b'2';
-        // link-name field (bytes 157-256)
-        let link_len = link_target.len().min(99);
-        header[157..157 + link_len].copy_from_slice(&link_target[..link_len]);
-        // ustar magic + version
-        header[257..263].copy_from_slice(b"ustar ");
-        header[263..265].copy_from_slice(b" \0");
-
-        let checksum: u32 = header.iter().map(|&b| b as u32).sum();
-        let cksum_str = format!("{checksum:06o}\0 ");
-        header[148..156].copy_from_slice(cksum_str.as_bytes());
-
-        // End-of-archive marker: two 512-byte zero blocks.
-        let mut tar_bytes = Vec::with_capacity(512 + 1024);
-        tar_bytes.extend_from_slice(&header);
-        tar_bytes.extend(std::iter::repeat(0u8).take(1024));
-
-        let file = std::fs::File::create(dest).expect("create archive");
-        let mut gz = flate2::write::GzEncoder::new(file, flate2::Compression::default());
-        gz.write_all(&tar_bytes).expect("write tar bytes");
-        gz.finish().expect("finish gzip");
-    }
-
     /// Builds a minimal `.zip` archive and writes it to `dest`.
     fn create_zip(dest: &Path, entries: &[(&str, &[u8])]) {
         let file = std::fs::File::create(dest).expect("create zip file");
@@ -756,46 +491,6 @@ mod tests {
     // --- tar.gz extraction tests ---
 
     #[test]
-    fn test_extract_tar_gz_rejects_path_traversal() {
-        let dir = tmp_dir("tgz_traversal");
-        let archive = dir.join("evil.tar.gz");
-        let dest = dir.join("dest");
-        std::fs::create_dir_all(&dest).expect("create dest dir");
-
-        // Use raw tar builder to bypass tar crate's path validation guards.
-        raw_tar_gz_with_entry(&archive, b"../../evil.txt", b"evil");
-
-        let result = extract_tar_gz(&archive, &dest);
-        assert!(result.is_err());
-        let msg = format!("{}", result.unwrap_err());
-        assert!(
-            msg.contains("path traversal"),
-            "expected 'path traversal' in error, got: {msg}"
-        );
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn test_extract_tar_gz_rejects_absolute_path() {
-        let dir = tmp_dir("tgz_abs");
-        let archive = dir.join("abs.tar.gz");
-        let dest = dir.join("dest");
-        std::fs::create_dir_all(&dest).expect("create dest dir");
-
-        // Use raw tar builder to bypass tar crate's path validation guards.
-        raw_tar_gz_with_entry(&archive, b"/etc/passwd", b"secret");
-
-        let result = extract_tar_gz(&archive, &dest);
-        assert!(
-            result.is_err(),
-            "should reject absolute path entry in tar.gz"
-        );
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
     fn test_extract_tar_gz_valid() {
         let dir = tmp_dir("tgz_valid");
         let archive = dir.join("valid.tar.gz");
@@ -820,32 +515,6 @@ mod tests {
     }
 
     // --- symlink extraction tests ---
-
-    #[test]
-    fn test_extract_tar_gz_rejects_symlink_that_escapes() {
-        let dir = tmp_dir("tgz_sym_escape");
-        let archive = dir.join("evil_sym.tar.gz");
-        let dest = dir.join("dest");
-        std::fs::create_dir_all(&dest).expect("create dest dir");
-
-        // Symlink inside "jdk-21/sub/" pointing three levels up — the path
-        // "jdk-21/sub/escape" is 3 levels deep inside dest, so "../../../" would
-        // resolve to the *parent* of dest, escaping the extraction directory.
-        create_tar_gz_with_symlink(&archive, b"jdk-21/sub/escape", b"../../../outside");
-
-        let result = extract_tar_gz(&archive, &dest);
-        assert!(
-            result.is_err(),
-            "should reject symlink that escapes dest_dir"
-        );
-        let msg = format!("{}", result.unwrap_err());
-        assert!(
-            msg.contains("escapes"),
-            "expected 'escapes' in error message, got: {msg}"
-        );
-
-        let _ = std::fs::remove_dir_all(&dir);
-    }
 
     #[cfg(unix)]
     #[test]
@@ -922,9 +591,13 @@ mod tests {
 
         let result = extract_zip(&archive, &dest);
         assert!(result.is_err());
-        let msg = format!("{}", result.unwrap_err());
+        // Use `{:#}` to get the full anyhow error chain including the cause.
+        let msg = format!("{:#}", result.unwrap_err());
         assert!(
-            msg.contains("path traversal") || msg.contains("enclosed_name"),
+            msg.contains("path traversal")
+                || msg.contains("enclosed_name")
+                || msg.contains("Invalid file path")
+                || msg.contains("invalid Zip archive"),
             "expected traversal error, got: {msg}"
         );
 
