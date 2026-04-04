@@ -1,24 +1,42 @@
 # AGENTS.md
 
-Guidelines for AI agents working on **sjvm** - a Rust CLI for managing Java JDK installations via symlinks.
+Guidelines for AI agents working on **sjvm** — a Rust CLI for managing Java JDK installations via symlinks.
 
-Detailed guidelines have been migrated to `.project-guidelines-for-ai/`. Read those files before writing any code.
+## Skill-Based Guidelines (primary reference)
 
-- **Coding**: [`.project-guidelines-for-ai/coding/coding-guidelines.md`](.project-guidelines-for-ai/coding/coding-guidelines.md)
-- **Code examples**: [`.project-guidelines-for-ai/coding/code-examples/README.md`](.project-guidelines-for-ai/coding/code-examples/README.md)
-- **Building**: [`.project-guidelines-for-ai/building/building-guidelines.md`](.project-guidelines-for-ai/building/building-guidelines.md)
-- **Testing**: [`.project-guidelines-for-ai/testing/testing-guidelines.md`](.project-guidelines-for-ai/testing/testing-guidelines.md)
-- **Documentation**: [`.project-guidelines-for-ai/documentation/documentation-guidelines.md`](.project-guidelines-for-ai/documentation/documentation-guidelines.md)
-- **Security**: [`.project-guidelines-for-ai/security/security-guidelines.md`](.project-guidelines-for-ai/security/security-guidelines.md)
+Detailed, loadable skill files live in `.opencode/skills/`. Load the relevant skill before writing code:
+
+| Skill | File | Covers |
+|-------|------|--------|
+| **Coding** | [`.opencode/skills/project-coding/SKILL.md`](.opencode/skills/project-coding/SKILL.md) | Code style, naming, error handling, architecture patterns |
+| **Build** | [`.opencode/skills/project-build/SKILL.md`](.opencode/skills/project-build/SKILL.md) | Build commands, CI/CD, Cargo.lock policy, feature flags |
+| **Test** | [`.opencode/skills/project-test/SKILL.md`](.opencode/skills/project-test/SKILL.md) | Test location, framework, patterns, running tests |
+| **Documentation** | [`.opencode/skills/project-documentation/SKILL.md`](.opencode/skills/project-documentation/SKILL.md) | Rustdoc, README, changelog standards |
+| **Security** | [`.opencode/skills/project-security/SKILL.md`](.opencode/skills/project-security/SKILL.md) | Secrets, input validation, dependency security, CVEs |
+| **Code Examples** | [`.opencode/skills/project-code-examples/SKILL.md`](.opencode/skills/project-code-examples/SKILL.md) | Index of pattern examples in `.code-examples-for-ai/` |
+
+Code examples (annotated snippets from production code) are in [`.code-examples-for-ai/`](.code-examples-for-ai/).
+
+Legacy guideline files remain in `.project-guidelines-for-ai/` for reference.
 
 ---
+
+## Quick Reference
+
+```bash
+# Standard workflow (run before every commit)
+rust-mcp-server_cargo-check --all-features && rust-mcp-server_cargo-test --all-features && rust-mcp-server_cargo-clippy --all-features -- -D warnings
+
+# Build and run
+cargo build && ./target/debug/sjvm --help
+```
 
 ## Build & Lint Commands
 
 ```bash
 # Use rust-mcp-server tools when available (preferred)
 rust-mcp-server_cargo-check    # Fast type checking
-rust-mcp-server_cargo-clippy   # Linting  
+rust-mcp-server_cargo-clippy   # Linting
 rust-mcp-server_cargo-fmt      # Format code
 rust-mcp-server_cargo-build    # Build project
 
@@ -38,9 +56,9 @@ rust-mcp-server_cargo-test                        # Run all unit tests
 rust-mcp-server_cargo-test --testname test_name   # Run specific test
 ```
 
-Unit tests are in `#[cfg(test)]` modules within source files (e.g., `src/commands/ui/install_screen.rs`).
+Unit tests are in `#[cfg(test)]` modules within source files.
 
-### E2E Tests (Special Task - Separate Workflow)
+### E2E Tests (Special Task — Separate Workflow)
 
 **E2E tests are NOT part of standard development.** They require Docker and are worked on separately.
 
@@ -50,7 +68,7 @@ docker compose -f ./docker/it-ubuntu-compose.yaml up --build
 docker compose -f ./docker/it-ubuntu-compose.yaml down
 ```
 
-**Never run e2e tests directly** - they need Docker with Java 11/17/21.
+**Never run e2e tests directly** — they need Docker with Java 11/17/21.
 
 ## Project Structure
 
@@ -89,13 +107,3 @@ tests/e2e.rs              # Integration tests (Docker-only)
 
 - **Rust Edition**: 2024 | **Min Version**: 1.88 | **Local Default Toolchain**: stable (`rust-toolchain.toml`)
 - **E2E Docker**: Ubuntu 22.04 with Java 11, 17, 21
-
-## Quick Reference
-
-```bash
-# Standard workflow
-rust-mcp-server_cargo-check --all-features && rust-mcp-server_cargo-test --all-features && rust-mcp-server_cargo-clippy --all-features -- -D warnings
-
-# Build and run
-cargo build && ./target/debug/sjvm --help
-```
