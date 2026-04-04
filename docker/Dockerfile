@@ -30,6 +30,24 @@ RUN mkdir -p /home/rustuser/jvms && \
     cp -r /usr/lib/jvm/java-21-openjdk-amd64 /home/rustuser/jvms/jdk-21 && \
     chown -R rustuser:rustuser /home/rustuser/jvms
 
+RUN echo "openjdk" > /home/rustuser/jvms/jdk-11/.sjvm-vendor \
+    && echo "openjdk" > /home/rustuser/jvms/jdk-17/.sjvm-vendor \
+    && echo "openjdk" > /home/rustuser/jvms/jdk-21/.sjvm-vendor \
+    && chown rustuser:rustuser /home/rustuser/jvms/jdk-11/.sjvm-vendor \
+    && chown rustuser:rustuser /home/rustuser/jvms/jdk-17/.sjvm-vendor \
+    && chown rustuser:rustuser /home/rustuser/jvms/jdk-21/.sjvm-vendor
+
+# Create local JDK archives for E2E tests (bypasses network in test env)
+RUN mkdir -p /home/rustuser/jdk-archives \
+    && tar -czf /home/rustuser/jdk-archives/jdk-openjdk-11.tar.gz -C /home/rustuser/jvms jdk-11 \
+    && tar -czf /home/rustuser/jdk-archives/jdk-openjdk-17.tar.gz -C /home/rustuser/jvms jdk-17 \
+    && tar -czf /home/rustuser/jdk-archives/jdk-openjdk-21.tar.gz -C /home/rustuser/jvms jdk-21 \
+    && cp -r /home/rustuser/jvms/jdk-21 /home/rustuser/jvms/jdk-graalvm-21 \
+    && echo "graalvm" > /home/rustuser/jvms/jdk-graalvm-21/.sjvm-vendor \
+    && tar -czf /home/rustuser/jdk-archives/jdk-graalvm-21.tar.gz -C /home/rustuser/jvms jdk-graalvm-21 \
+    && rm -rf /home/rustuser/jvms/jdk-graalvm-21 \
+    && chown -R rustuser:rustuser /home/rustuser/jdk-archives
+
 USER rustuser
 WORKDIR /home/rustuser
 

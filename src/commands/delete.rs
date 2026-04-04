@@ -87,8 +87,20 @@ pub(crate) fn delete_jdk(jdk_name: &str) -> Result<PathBuf> {
 
 /// CLI handler for `sjvm delete`.
 ///
-/// Prompts for confirmation before calling [`delete_jdk`].
+/// Validates the JDK name, then prompts for confirmation before calling [`delete_jdk`].
 pub(crate) fn run_delete(jdk_name: &str) -> Result<()> {
+    // Reject obviously invalid names before prompting for confirmation.
+    // This ensures a non-zero exit for obviously-bad inputs even when stdin is a pipe.
+    if jdk_name.is_empty()
+        || jdk_name == "."
+        || jdk_name == ".."
+        || jdk_name.contains('/')
+        || jdk_name.contains('\\')
+        || jdk_name.contains('\0')
+    {
+        bail!("Invalid JDK name: {:?}", jdk_name);
+    }
+
     // Prompt for confirmation
     print!("Are you sure you want to delete \"{jdk_name}\"? [y/N] ");
     io::stdout().flush().context("Failed to flush stdout")?;

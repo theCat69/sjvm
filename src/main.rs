@@ -54,6 +54,9 @@ enum Commands {
         /// Overwrite an existing installation of the same JDK version
         #[arg(long)]
         force: bool,
+        /// Path to a local .tar.gz archive to install directly (bypasses vendor API)
+        #[arg(long, value_name = "PATH")]
+        local_archive: Option<std::path::PathBuf>,
     },
     /// Remove an installed JDK (prompts for confirmation)
     Delete {
@@ -330,6 +333,7 @@ fn main() {
             os,
             arch,
             force,
+            local_archive,
         } => {
             if let Err(e) = commands::install::run_install(
                 &version,
@@ -337,6 +341,7 @@ fn main() {
                 os.as_deref(),
                 arch.as_deref(),
                 force,
+                local_archive,
             ) {
                 eprintln!("❌ Install failed: {e}");
                 std::process::exit(1);

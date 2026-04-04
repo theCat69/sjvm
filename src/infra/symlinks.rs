@@ -1,4 +1,9 @@
-use std::path::{Path, PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
+
+use anyhow::Context as _;
 
 use crate::infra::config::config;
 
@@ -42,14 +47,28 @@ fn remove_existing_link(link: &Path) -> anyhow::Result<()> {
 
 /// Creates (or replaces) a directory symlink at `link` pointing to `target`.
 ///
+/// Ensures the parent directory of `link` exists before creating the symlink.
 /// Removal of any existing symlink is performed unconditionally before
 /// creation to avoid a TOCTOU race between an existence check and the
 /// remove call.
 ///
 /// # Errors
 /// Returns an error if the existing symlink cannot be removed (for reasons
-/// other than it being absent) or if symlink creation fails.
+/// other than it being absent), if the parent directory cannot be created,
+/// or if symlink creation fails.
 pub(crate) fn create_symlink(target: &Path, link: &Path) -> anyhow::Result<()> {
+    // Ensure the parent directory of the symlink exists.
+    if let Some(parent) = link.parent()
+        && !parent.as_os_str().is_empty()
+    {
+        fs::create_dir_all(parent).with_context(|| {
+            format!(
+                "Failed to create parent directory for symlink: {}",
+                parent.display()
+            )
+        })?;
+    }
+
     remove_existing_link(link)?;
 
     #[cfg(target_os = "windows")]

@@ -258,14 +258,24 @@ fn test_ui_java_version_switch() {
 
 fn install_jdk_for_test(version: u16, vendor: &str) -> String {
     let version_str = version.to_string();
+    let archive_path = format!("/home/rustuser/jdk-archives/jdk-{vendor}-{version}.tar.gz");
     let output = sjvm_command()
-        .args(["install", &version_str, "--vendor", vendor, "--force"])
+        .args([
+            "install",
+            &version_str,
+            "--vendor",
+            vendor,
+            "--force",
+            "--local-archive",
+            &archive_path,
+        ])
         .output()
         .expect("Failed to spawn sjvm install");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         output.status.success(),
-        "sjvm install {version} --vendor {vendor} --force failed, stderr: {stderr}"
+        "sjvm install {version} --vendor {vendor} --force --local-archive {archive_path} failed, \
+         stderr: {stderr}"
     );
 
     // Find the installed JDK by checking the vendor file contents so that when
@@ -432,7 +442,15 @@ fn test_install_openjdk_21() {
     let before = list_jdks();
 
     let output = sjvm_command()
-        .args(["install", "21", "--vendor", "openjdk", "--force"])
+        .args([
+            "install",
+            "21",
+            "--vendor",
+            "openjdk",
+            "--force",
+            "--local-archive",
+            "/home/rustuser/jdk-archives/jdk-openjdk-21.tar.gz",
+        ])
         .output()
         .expect("Failed to run sjvm install 21 --vendor openjdk --force");
 
@@ -460,7 +478,15 @@ fn test_install_openjdk_21() {
 #[ignore]
 fn test_install_graalvm_21() {
     let output = sjvm_command()
-        .args(["install", "21", "--vendor", "graalvm", "--force"])
+        .args([
+            "install",
+            "21",
+            "--vendor",
+            "graalvm",
+            "--force",
+            "--local-archive",
+            "/home/rustuser/jdk-archives/jdk-graalvm-21.tar.gz",
+        ])
         .output()
         .expect("Failed to run sjvm install 21 --vendor graalvm --force");
 
@@ -482,9 +508,8 @@ fn test_install_graalvm_21() {
 #[test]
 #[ignore]
 fn test_cli_delete_rejects_path_traversal() {
-    // Provide "y\n" so the confirmation prompt is answered and delete_jdk is reached.
-    // The real path-traversal guard (canonicalize + starts_with check) then rejects
-    // "../etc" with a non-zero exit — which is what this test asserts.
+    // "../etc" contains '/' so the early name-validation guard fires before any
+    // confirmation prompt is read — the process exits non-zero immediately.
     let output = spawn_sjvm_with_stdin(&["delete", "../etc"], b"y\n");
 
     assert!(
