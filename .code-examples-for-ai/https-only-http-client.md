@@ -1,4 +1,4 @@
-<!-- Demonstrates: HTTPS-only enforcement guard; OnceLock HTTP client singletons; sensitive header handling; streaming download with progress -->
+<!-- Demonstrates: HTTPS-only enforcement guard; OnceLock HTTP client singletons; sensitive header handling; streaming download with 2 GiB cap -->
 
 ```rust
 //! HTTP utilities for sjvm — all I/O is HTTPS-only, TLS via rustls.
@@ -81,6 +81,23 @@ pub(crate) fn get_json(url: &str) -> Result<Value> {
     response.json::<Value>()
         .with_context(|| format!("Failed to deserialise JSON response from {url}"))
 }
+
+// ---------------------------------------------------------------------------
+// 2 GiB download cap — prevents archive bomb attacks in the streaming loop
+// ---------------------------------------------------------------------------
+
+// Maximum allowed response body size. Enforced in the read loop;
+// the partial destination file is deleted before bailing.
+const MAX_DOWNLOAD_BYTES: u64 = 2 * 1024 * 1024 * 1024; // 2 GiB
+
+// Illustrative excerpt — actual loop inside download_streaming():
+//
+//     bytes_downloaded += n as u64;
+//     if bytes_downloaded > MAX_DOWNLOAD_BYTES {
+//         drop(writer);
+//         let _ = std::fs::remove_file(dest);
+//         bail!("Download aborted: response exceeded maximum allowed size of 2 GiB");
+//     }
 
 // --- Tests ------------------------------------------------------------------
 #[cfg(test)]

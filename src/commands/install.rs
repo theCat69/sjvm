@@ -96,7 +96,10 @@ pub(crate) fn run_install(
             "{spinner:.green} [{elapsed_precise}] [{wide_bar:.cyan/blue}] \
              {bytes}/{total_bytes} ({eta})",
         )
-        .unwrap_or_else(|_| ProgressStyle::default_bar())
+        .unwrap_or_else(|e| {
+            eprintln!("⚠️  Warning: progress bar template error: {e}");
+            ProgressStyle::default_bar()
+        })
         .progress_chars("#>-"),
     );
 
@@ -127,7 +130,7 @@ pub(crate) fn run_install(
     if io::stdin().is_terminal() {
         print!("Switch to the newly installed JDK now? [y/N] ");
         use std::io::Write as _;
-        io::stdout().flush().ok();
+        io::stdout().flush().context("Failed to flush stdout")?;
 
         let mut answer = String::new();
         if io::stdin().read_line(&mut answer).is_ok() {

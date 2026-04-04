@@ -105,11 +105,13 @@ pub(crate) fn switch_to_jdk(jdk_path: &Path) -> anyhow::Result<()> {
     // Verify the canonical path is still inside one of the configured jdks_dirs.
     let cfg = config();
     let in_configured_dir = cfg.jdks_dirs.iter().any(|dir| {
-        // Attempt to canonicalize the configured dir; fall back to the raw path
-        // if it does not exist yet (e.g. first-run before setup).
-        let canonical_dir = PathBuf::from(dir)
-            .canonicalize()
-            .unwrap_or_else(|_| PathBuf::from(dir));
+        // Canonicalize the configured dir. If it doesn't exist yet (e.g. first-run
+        // before setup), skip it — never fall back to the raw string comparison
+        // since that would allow path traversal through unresolved symlinks.
+        let canonical_dir = match PathBuf::from(dir).canonicalize() {
+            Ok(p) => p,
+            Err(_) => return false, // dir doesn't exist yet — skip it
+        };
         canonical.starts_with(&canonical_dir)
     });
 

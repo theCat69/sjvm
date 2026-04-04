@@ -22,6 +22,9 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 const SHORT_TIMEOUT: Duration = Duration::from_secs(30);
 const LONG_TIMEOUT: Duration = Duration::from_secs(600);
 
+/// Maximum number of bytes allowed in a single download (2 GiB).
+const MAX_DOWNLOAD_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
 /// Builds a [`ClientBuilder`] pre-configured with the shared defaults:
 /// rustls TLS, User-Agent header, and — when `GITHUB_TOKEN` is set at
 /// runtime — an `Authorization: Bearer` default header.
@@ -58,32 +61,36 @@ fn build_client_builder() -> Result<ClientBuilder> {
 
 fn short_client() -> Result<&'static Client> {
     static SHORT_CLIENT: OnceLock<Client> = OnceLock::new();
-    if let Some(c) = SHORT_CLIENT.get() {
-        return Ok(c);
+    if SHORT_CLIENT.get().is_none() {
+        let client = build_client_builder()
+            .context("Failed to configure HTTP client")?
+            .timeout(SHORT_TIMEOUT)
+            .build()
+            .context("Failed to build short-timeout HTTP client")?;
+        // OnceLock::set can fail if another thread races, but the value it
+        // already contains is just as valid — return whichever wins.
+        let _ = SHORT_CLIENT.set(client);
     }
-    let client = build_client_builder()
-        .context("Failed to configure HTTP client")?
-        .timeout(SHORT_TIMEOUT)
-        .build()
-        .context("Failed to build short-timeout HTTP client")?;
-    // OnceLock::set can fail if another thread races, but the value it
-    // already contains is just as valid — return whichever wins.
-    Ok(SHORT_CLIENT.get_or_init(|| client))
+    SHORT_CLIENT
+        .get()
+        .context("BUG: short HTTP client not initialized after init")
 }
 
 fn long_client() -> Result<&'static Client> {
     static LONG_CLIENT: OnceLock<Client> = OnceLock::new();
-    if let Some(c) = LONG_CLIENT.get() {
-        return Ok(c);
+    if LONG_CLIENT.get().is_none() {
+        let client = build_client_builder()
+            .context("Failed to configure HTTP client")?
+            .timeout(LONG_TIMEOUT)
+            .build()
+            .context("Failed to build long-timeout HTTP client")?;
+        // OnceLock::set can fail if another thread races, but the value it
+        // already contains is just as valid — return whichever wins.
+        let _ = LONG_CLIENT.set(client);
     }
-    let client = build_client_builder()
-        .context("Failed to configure HTTP client")?
-        .timeout(LONG_TIMEOUT)
-        .build()
-        .context("Failed to build long-timeout HTTP client")?;
-    // OnceLock::set can fail if another thread races, but the value it
-    // already contains is just as valid — return whichever wins.
-    Ok(LONG_CLIENT.get_or_init(|| client))
+    LONG_CLIENT
+        .get()
+        .context("BUG: long HTTP client not initialized after init")
 }
 
 // ---------------------------------------------------------------------------
@@ -191,6 +198,11 @@ pub(crate) fn download_streaming(
             .write_all(&buf[..n])
             .with_context(|| format!("Failed to write to {}", dest.display()))?;
         bytes_downloaded += n as u64;
+        if bytes_downloaded > MAX_DOWNLOAD_BYTES {
+            drop(writer);
+            let _ = std::fs::remove_file(dest);
+            bail!("Download aborted: response exceeded maximum allowed size of 2 GiB from {url}");
+        }
         on_progress(bytes_downloaded, content_length);
     }
 

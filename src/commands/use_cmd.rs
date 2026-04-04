@@ -123,7 +123,10 @@ fn resolve_candidate(
                 bail!("JDK version '{version}' not found.");
             }
         }
-        1 => Ok(candidates.into_iter().next().unwrap()),
+        1 => candidates
+            .into_iter()
+            .next()
+            .context("BUG: empty candidate list in single-match arm"),
         _ => disambiguate(&candidates),
     }
 }
@@ -139,6 +142,17 @@ fn print_local_env_commands(jdk_path: &Path, _display_name: &str) -> anyhow::Res
     let path_str = jdk_path
         .to_str()
         .context("JDK path is not valid UTF-8; cannot generate shell export commands")?;
+
+    // Guard: reject paths containing shell metacharacters before emitting eval-able output.
+    // Double-quoting alone does not protect against embedded `"`, `$`, or backtick.
+    for ch in ['"', '$', '`', '\\'] {
+        if path_str.contains(ch) {
+            anyhow::bail!(
+                "JDK path contains shell metacharacter '{ch}' and cannot be safely exported. \
+                 Rename the JDK directory to remove special characters."
+            );
+        }
+    }
 
     if cfg!(target_os = "windows") {
         println!("Using local version automatically is not supported on cmd.");
@@ -256,5 +270,19 @@ mod tests {
         let result = resolve_candidate("17", None, vec![path.clone()]);
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), path);
+    }
+
+    #[test]
+    fn test_local_env_commands_rejects_metacharacters() {
+        // Paths with shell metacharacters must be rejected before eval-able output is emitted.
+        for bad_path in &[
+            "/jvms/jdk-17\"injected",
+            "/jvms/jdk-17$HOME",
+            "/jvms/jdk-17`id`",
+        ] {
+            let path = std::path::PathBuf::from(bad_path);
+            let result = super::print_local_env_commands(&path, "test");
+            assert!(result.is_err(), "expected error for path '{bad_path}'");
+        }
     }
 }

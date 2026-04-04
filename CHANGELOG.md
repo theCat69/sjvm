@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- `sjvm list` no longer errors on first run when symlink does not exist yet
+- `sjvm delete` now searches all configured `jdks_dirs`, not just the first
+- `jdk_switcher`: canonicalize fallback removed — configured dirs that do not exist are safely skipped instead of falling back to raw string comparison
+- `downloader`: double cleanup of temp extraction dir in error path removed
+- `memory`: `sort_by` replaced with `sort_by_key` for correct case-insensitive sort
+
+### Changed
+
+- `config`: `validate_no_traversal` now also rejects relative paths (not just `..` traversal)
+- `downloader`: `identify_top_level_dir` uses `metadata()` (follows symlinks) instead of `symlink_metadata()` for macOS JDK archive compatibility
+- All `assert!(url.starts_with("https://"))` in `jdk_catalog` replaced with `ensure!()` to return errors instead of panicking
+
+### Security
+
+- `http`: 2 GiB maximum download size guard added to prevent archive bomb attacks
+- `use_cmd`: `print_local_env_commands` now validates path contains no shell metacharacters (`"`, `$`, backtick) before emitting eval-able output
+- `config`: `validate_no_traversal` now rejects relative paths in addition to `..` traversal and NUL bytes
+- `memory`: mutex poison recovery now logs a warning instead of silently recovering
+
 ## [2.0.1] - 2026-03-30
 
 ### Added

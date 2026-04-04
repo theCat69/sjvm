@@ -84,6 +84,9 @@ fn validate_no_traversal(p: &str, field: &str) -> anyhow::Result<()> {
     if p.contains('\0') {
         bail!("config field '{field}' contains a NUL byte which is not allowed");
     }
+    if !Path::new(p).is_absolute() {
+        bail!("config field '{field}' must be an absolute path, got: '{p}'");
+    }
     let path = PathBuf::from(p);
     if path.components().any(|c| c == Component::ParentDir) {
         bail!("config field '{field}' contains path traversal ('..') which is not allowed");
@@ -179,7 +182,13 @@ mod tests {
     fn test_validate_no_traversal_accepts_valid_paths() {
         assert!(validate_no_traversal("/usr/lib/jvm", "field").is_ok());
         assert!(validate_no_traversal("/home/user/.java/current", "field").is_ok());
-        assert!(validate_no_traversal("relative/path", "field").is_ok());
+    }
+
+    #[test]
+    fn test_validate_no_traversal_rejects_relative_path() {
+        assert!(validate_no_traversal("relative/path", "field").is_err());
+        assert!(validate_no_traversal(".", "field").is_err());
+        assert!(validate_no_traversal("usr/lib/jvm", "field").is_err());
     }
 
     #[test]

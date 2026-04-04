@@ -54,6 +54,8 @@ pub(crate) fn invalidate_memory() {
     match MEMORY.lock() {
         Ok(mut guard) => *guard = None,
         Err(e) => {
+            // Log a warning when recovering from mutex poison so operators can investigate.
+            eprintln!("sjvm: WARNING — memory mutex was poisoned, recovering");
             let mut guard = e.into_inner(); // poison recovery
             *guard = None;
         }

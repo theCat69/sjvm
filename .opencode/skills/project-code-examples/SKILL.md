@@ -20,6 +20,7 @@ These examples demonstrate the coding patterns used in this project. Each file c
 | `unit-test-patterns.md` | `#[cfg(test)] mod tests`, `use super::*`, `anyhow::Result<()>` return type, parametric test loops, error-message assertions, pure-function fixture pattern |
 | `platform-symlinks.md` | `#[cfg(unix)]` / `#[cfg(target_os = "windows")]` symlink guards; atomic replace pattern; cross-device rename → copy fallback |
 | `https-only-http-client.md` | `require_https()` guard; `HeaderValue::set_sensitive(true)` for `GITHUB_TOKEN`; `use_rustls_tls()` + `danger_accept_invalid_certs(false)`; OnceLock HTTP client singleton |
+| `inner-loop-extraction.md` | Extract testable inner loop from singleton-reading function; pure `scan_dir` + thin `detect_jdks` wrapper pattern |
 
 ## Location
 

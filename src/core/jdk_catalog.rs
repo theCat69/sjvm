@@ -5,7 +5,7 @@
 
 use std::collections::HashSet;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, bail, ensure};
 use serde_json::Value;
 
 // ---------------------------------------------------------------------------
@@ -219,6 +219,21 @@ pub(crate) fn parse_graalvm_releases(
 }
 
 // ---------------------------------------------------------------------------
+// GraalVM pagination helper
+// ---------------------------------------------------------------------------
+
+/// Builds the GraalVM CE GitHub Releases API URL for the given page number.
+fn graalvm_page_url(page: u32) -> String {
+    const BASE_URL: &str =
+        "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases?per_page=100";
+    if page == 1 {
+        BASE_URL.to_owned()
+    } else {
+        format!("{BASE_URL}&page={page}")
+    }
+}
+
+// ---------------------------------------------------------------------------
 // HTTP resolver
 // ---------------------------------------------------------------------------
 
@@ -242,7 +257,10 @@ fn resolve_adoptium(version: u16, os: &str, arch: &str) -> Result<ArtifactInfo> 
         "https://api.adoptium.net/v3/assets/latest/{version}/hotspot\
          ?os={os}&architecture={arch}&image_type=jdk&jvm_impl=hotspot&vendor=eclipse"
     );
-    assert!(url.starts_with("https://"), "Adoptium URL must be HTTPS");
+    ensure!(
+        url.starts_with("https://"),
+        "Adoptium URL must use HTTPS: {url}"
+    );
 
     let json = crate::infra::http::get_json(&url)
         .with_context(|| format!("Failed to fetch Adoptium API for JDK {version}"))?;
@@ -259,17 +277,14 @@ fn resolve_graalvm(version: u16, os: &str, arch: &str) -> Result<ArtifactInfo> {
         other => other,
     };
 
-    const BASE_URL: &str =
-        "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases?per_page=100";
     const MAX_PAGES: u32 = 5;
 
     for page in 1..=MAX_PAGES {
-        let url = if page == 1 {
-            BASE_URL.to_owned()
-        } else {
-            format!("{BASE_URL}&page={page}")
-        };
-        assert!(url.starts_with("https://"), "GraalVM URL must be HTTPS");
+        let url = graalvm_page_url(page);
+        ensure!(
+            url.starts_with("https://"),
+            "GraalVM URL must use HTTPS: {url}"
+        );
 
         let json = crate::infra::http::get_json(&url)
             .with_context(|| format!("Failed to fetch GraalVM releases page {page}"))?;
@@ -359,7 +374,10 @@ pub(crate) fn fetch_available_versions(vendor: &Vendor) -> Result<Vec<u16>> {
 
 fn fetch_adoptium_versions() -> Result<Vec<u16>> {
     let url = "https://api.adoptium.net/v3/info/available_releases";
-    assert!(url.starts_with("https://"), "Adoptium URL must be HTTPS");
+    ensure!(
+        url.starts_with("https://"),
+        "Adoptium versions URL must use HTTPS: {url}"
+    );
     let json =
         crate::infra::http::get_json(url).context("Failed to fetch Adoptium available releases")?;
     let versions = parse_adoptium_available_releases(&json);
@@ -367,19 +385,16 @@ fn fetch_adoptium_versions() -> Result<Vec<u16>> {
 }
 
 fn fetch_graalvm_versions() -> Result<Vec<u16>> {
-    const BASE_URL: &str =
-        "https://api.github.com/repos/graalvm/graalvm-ce-builds/releases?per_page=100";
     const MAX_PAGES: u32 = 5;
 
     let mut set: HashSet<u16> = HashSet::new();
 
     for page in 1..=MAX_PAGES {
-        let url = if page == 1 {
-            BASE_URL.to_owned()
-        } else {
-            format!("{BASE_URL}&page={page}")
-        };
-        assert!(url.starts_with("https://"), "GraalVM URL must be HTTPS");
+        let url = graalvm_page_url(page);
+        ensure!(
+            url.starts_with("https://"),
+            "GraalVM versions URL must use HTTPS: {url}"
+        );
 
         let json = crate::infra::http::get_json(&url)
             .with_context(|| format!("Failed to fetch GraalVM releases page {page}"))?;

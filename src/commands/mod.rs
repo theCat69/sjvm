@@ -18,7 +18,10 @@ pub(crate) fn validate_version_string(s: &str) -> Result<(), String> {
     if s.len() > 64 {
         return Err("version string too long (max 64 chars)".to_owned());
     }
-    if !s.chars().all(|c| c.is_alphanumeric() || "-._".contains(c)) {
+    if !s
+        .chars()
+        .all(|c| c.is_alphanumeric() || matches!(c, '-' | '.' | '_'))
+    {
         return Err(
             "version contains illegal characters (only alphanumeric, '-', '.', '_' allowed)"
                 .to_owned(),
@@ -66,5 +69,11 @@ mod tests {
     fn test_validate_version_string_accepts_max_length() {
         let exactly_64 = "a".repeat(64);
         assert!(validate_version_string(&exactly_64).is_ok());
+    }
+
+    #[test]
+    fn test_validate_version_string_rejects_space() {
+        assert!(validate_version_string("17 beta").is_err());
+        assert!(validate_version_string(" 17").is_err());
     }
 }

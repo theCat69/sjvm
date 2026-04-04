@@ -1,10 +1,15 @@
-use std::path::{Path, PathBuf};
+# Testable Inner-Loop Extraction Pattern
 
-use crate::infra::config::config;
+Demonstrates extracting a pure inner loop from a function that reads global singletons, making it unit-testable without mocking.
+
+## Pattern: `scan_dir` extracted from `detect_jdks`
+
+```rust
+// src/core/jdk_resolver.rs
 
 /// Scans a single directory for immediate subdirectories (JDK candidates).
 ///
-/// Entries that are not directories or cannot be read are silently skipped.
+/// Pure function — no global state read. Silently skips unreadable entries.
 pub(crate) fn scan_dir(path: &Path) -> Vec<PathBuf> {
     if let Ok(entries) = std::fs::read_dir(path) {
         entries
@@ -17,26 +22,19 @@ pub(crate) fn scan_dir(path: &Path) -> Vec<PathBuf> {
     }
 }
 
-/// Returns all JDK directories found in the configured `jdks_dirs` search paths.
-///
-/// Each configured directory is scanned for immediate subdirectories; entries
-/// that are not directories are silently skipped. This is a pure scan function —
-/// no caching is performed here; caching is handled by `memory.rs`.
+/// Calls the pure inner function for each configured dir.
+/// Not directly unit-testable (reads config() singleton).
 pub(crate) fn detect_jdks() -> Vec<PathBuf> {
     let config = config();
     let mut jdks = Vec::new();
-
     for base in &config.jdks_dirs {
         jdks.extend(scan_dir(Path::new(base)));
     }
-
     jdks
 }
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use super::scan_dir;
 
     fn tmp_dir(suffix: &str) -> PathBuf {
@@ -60,27 +58,12 @@ mod tests {
     }
 
     #[test]
-    fn test_scan_dir_skips_files() {
-        let dir = tmp_dir("scan_files");
-        std::fs::create_dir_all(dir.join("jdk-17")).unwrap();
-        std::fs::write(dir.join("not-a-dir.txt"), b"file").unwrap();
-        let result = scan_dir(&dir);
-        assert_eq!(result.len(), 1);
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn test_scan_dir_empty() {
-        let dir = tmp_dir("scan_empty");
-        let result = scan_dir(&dir);
-        assert!(result.is_empty());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
     fn test_scan_dir_nonexistent_returns_empty() {
         let dir = PathBuf::from("/nonexistent/sjvm/test/dir");
         let result = scan_dir(&dir);
-        assert!(result.is_empty());
+        assert!(result.is_empty()); // never panics
     }
 }
+```
+
+**Key insight**: When a function reads from a global singleton (like `config()`), extract the testable logic into a separate `pub(crate)` pure function. Test the pure function with real temp dirs; the singleton-reading wrapper stays untested at unit-test level.

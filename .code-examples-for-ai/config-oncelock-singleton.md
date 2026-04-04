@@ -68,11 +68,15 @@ fn merge_config(config_value: Value) -> anyhow::Result<Config> {
     Ok(Config { symlink_dir, jdks_dirs: default_jdks_dirs() })
 }
 
-/// Security guard: rejects paths with '..' components or NUL bytes.
+/// Security guard: rejects paths with '..' components, NUL bytes, or relative paths.
 /// Called on every config-supplied path before use.
 fn validate_no_traversal(p: &str, field: &str) -> anyhow::Result<()> {
     if p.contains('\0') {
         bail!("config field '{field}' contains a NUL byte which is not allowed");
+    }
+    // Reject relative paths — only absolute paths are accepted in config
+    if !Path::new(p).is_absolute() {
+        bail!("config field '{field}' must be an absolute path");
     }
     let path = PathBuf::from(p);
     if path.components().any(|c| c == Component::ParentDir) {

@@ -194,7 +194,7 @@ Are you sure you want to delete "jdk-21"? [y/N] y
 ✓ Deleted jdk-21
 ```
 
-The name must be a plain directory name — no path separators or `..` components. The JDK must exist inside the first configured `jdks_dirs`.
+The name must be a plain directory name — no path separators or `..` components. `sjvm delete` searches **all** configured `jdks_dirs` directories for the named JDK.
 
 ### Versions
 

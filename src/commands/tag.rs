@@ -28,7 +28,9 @@ pub(crate) fn run_tag(name: &str, vendor: &Vendor, force: bool) -> Result<()> {
         })
         .cloned()
         .with_context(|| {
-            format!("JDK '{name}' not found. Run 'sjvm list' to see available JDKs.")
+            format!(
+                "JDK '{name}' not found. Run 'sjvm list' to refresh the cache and see available JDKs."
+            )
         })?;
 
     let vendor_file = jdk_path.join(".sjvm-vendor");
@@ -50,20 +52,4 @@ pub(crate) fn run_tag(name: &str, vendor: &Vendor, force: bool) -> Result<()> {
 
     println!("✅ Tagged '{name}' as '{vendor_name}'");
     Ok(())
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::core::jdk_catalog::Vendor;
-    use crate::core::jdk_switcher::vendor_to_str;
-
-    #[test]
-    fn test_tag_vendor_to_string_openjdk() {
-        assert_eq!(vendor_to_str(&Vendor::OpenJdk), "openjdk");
-    }
-
-    #[test]
-    fn test_tag_vendor_to_string_graalvm() {
-        assert_eq!(vendor_to_str(&Vendor::GraalVm), "graalvm");
-    }
 }

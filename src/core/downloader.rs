@@ -106,7 +106,11 @@ pub(crate) fn identify_top_level_dir(dir: &Path) -> Result<PathBuf> {
         ),
         1 => {
             let path = entries.remove(0);
-            if path.is_dir() {
+            if path
+                .metadata()
+                .map(|m| m.file_type().is_dir())
+                .unwrap_or(false)
+            {
                 Ok(path)
             } else {
                 bail!(
@@ -350,10 +354,12 @@ pub(crate) fn install_jdk(
     })();
 
     if post_extract_result.is_err() {
+        let _ = fs::remove_file(&temp_path);
         let _ = fs::remove_dir_all(&temp_extract_dir);
+        return post_extract_result;
     }
 
-    // Step 9 — clean up temp files (best-effort, non-fatal).
+    // Step 10 — clean up temp files (best-effort, non-fatal).
     let _ = fs::remove_file(&temp_path);
     let _ = fs::remove_dir_all(&temp_extract_dir);
 

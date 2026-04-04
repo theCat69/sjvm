@@ -30,7 +30,10 @@ pub(crate) struct Memory {
 /// After `invalidate_memory()` is called the next invocation will re-read from
 /// disk (or rebuild from the filesystem if the disk file is also absent).
 pub(crate) fn memory() -> anyhow::Result<Memory> {
-    let mut guard = MEMORY.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = MEMORY.lock().unwrap_or_else(|e| {
+        eprintln!("sjvm: WARNING — memory mutex was poisoned, recovering");
+        e.into_inner()
+    });
     if guard.is_none() {
         *guard = Some(load_or_init()?);
     }
@@ -53,17 +56,11 @@ fn load_or_init() -> anyhow::Result<Memory> {
     if !mem_file.is_file() {
         let current = current_jdk()?;
         let mut jdks = detect_jdks();
-        jdks.sort_by(|a, b| {
-            a.file_name()
+        jdks.sort_by_key(|p| {
+            p.file_name()
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_lowercase()
-                .cmp(
-                    &b.file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_lowercase(),
-                )
         });
         let memory = Memory { current, jdks };
         dump_binaries(&memory)?;
@@ -282,17 +279,11 @@ mod tests {
             PathBuf::from("/jvms/temurin-11-jdk"),
         ];
 
-        jdks.sort_by(|a, b| {
-            a.file_name()
+        jdks.sort_by_key(|p| {
+            p.file_name()
                 .unwrap_or_default()
                 .to_string_lossy()
                 .to_lowercase()
-                .cmp(
-                    &b.file_name()
-                        .unwrap_or_default()
-                        .to_string_lossy()
-                        .to_lowercase(),
-                )
         });
 
         let names: Vec<&str> = jdks

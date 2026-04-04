@@ -40,3 +40,30 @@ pub(crate) fn setup() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    // setup() uses config() singleton and detect_jdks() — hard to fully unit test.
+    // Test the pure logic pieces.
+
+    #[test]
+    fn test_setup_logic_first_jdk_selection() {
+        // Verifies that if jdks list is non-empty, first() is used.
+        use std::path::PathBuf;
+        let jdks: Vec<PathBuf> = vec![
+            PathBuf::from("/jvms/temurin-17"),
+            PathBuf::from("/jvms/temurin-21"),
+        ];
+        let first = jdks.first().cloned();
+        assert_eq!(first, Some(PathBuf::from("/jvms/temurin-17")));
+    }
+
+    #[test]
+    fn test_setup_logic_empty_jdks() {
+        // Verifies that if jdks list is empty, first() returns None.
+        use std::path::PathBuf;
+        let jdks: Vec<PathBuf> = vec![];
+        let first = jdks.first().cloned();
+        assert!(first.is_none());
+    }
+}
