@@ -172,6 +172,9 @@ fn test_ui_java_version_switch() {
     use std::thread;
     use std::time::Duration;
 
+    // Re-install jdk-21 in case a previous test (test_ui_delete) removed it.
+    install_jdk_for_test(21, "openjdk");
+
     // Set initial Java version to jdk-21
     set_java_version_to("jdk-21");
 

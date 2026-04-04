@@ -30,6 +30,7 @@ pub(crate) fn detect_jdks() -> Vec<PathBuf> {
         jdks.extend(scan_dir(Path::new(base)));
     }
 
+    jdks.sort();
     jdks
 }
 
